@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<!-- prevent double click zoom on android -->
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+
+<html charset="utf-8">
+<body style="width: 100%;height: 100%;background:#222222">
+<div style="position:fixed;left:0;top:0;width:100vw;height:50px;" id="base" charset="utf-8" >
+
+  <!-- step by step debugger-->
+<button style="position:absolute;left:calc(75vw - 50px);top:3px;width:46px;height:46px;color:#ffffff;border-radius:5px;background-color:#101010;font-size:30px;border:0;outline: none;"
+  title="execute next step ( s )" onclick="run();">&gt;</button>
+
+</div>
+<div style="position:fixed;left:0;top:50px;width:100vw;height:calc(100vh - 50px);">
+<textArea style="z-index:1;position:absolute;left:0;top:0;width:75%;height:100%;background:#222222;color:#ffffff;margin:15px;border:0;outline: none;" id="codeArea" charset="utf-8"></textArea>
+
+<div style="position:absolute;left:75%;top:0;width:25%;height:100%;">
+<text style="position:absolute;left:5%;top:3%;width:90%;height:30px;color:#ffffff;">Input:</text>
+<textArea style="position:absolute;left:5%;top:calc(3% + 35px);width:90%;height:calc(44% - 35px);background:#222222;color:#ffffff;outline: none;" id="input" charset="utf-8" ></textArea>
+<text style="position:absolute;left:5%;top:53%;width:90%;height:30px;color:#ffffff;">Output:</text>
+<textArea style="position:absolute;left:5%;top:calc(53% + 35px);width:90%;height:calc(44% - 35px);background:#222222;color:#ffffff;outline: none;" id="output" charset="utf-8" readonly></textArea>
+</div>
+</div>
+</body>
+<script src="./OneChar.js"></script>
+<script>
+//XXX allow customizing maxDepth/forWhile-mode mode via URL flags
+//XXX show stack and memory
+//XXX allow running program step by step
+
+const stdinArea=document.getElementById("input");
+const stdoutArea=document.getElementById("output");
+const codeArea=document.getElementById("codeArea");//use text-area for capturing character input (only way to detect modifier keys)
+
+const utf8Decode=new TextDecoder('utf-8');
+const utf8Encode=new TextEncoder('utf-8');
+
+let stdinIndex=0;
+let stdOutBytes=[];
+
+function stdinRead(){
+  let stdin=Array.from(utf8Encode.encode(stdinArea.value));
+  if(stdinIndex>=stdin.length)
+    return -1;
+  return stdin[stdinIndex++];
+}
+function stdinUnread(){
+  if(stdinIndex>0)
+    stdinIndex--;
+}
+function stdoutWrite(chr){
+  if(chr<0)
+    chr=(chr%256+256);
+  stdOutBytes.push(chr%256);
+  output.value=utf8Decode.decode(new Uint8Array(stdOutBytes));
+}
+
+function reset(){
+  initProgram();
+  stdinIndex=0;
+  stdOutBytes=[];
+  output.value="";
+}
+function run(){
+  reset();
+  loadProgram(codeArea.value);
+  runProgram();
+}
+
+reset();
+</script>
+</html>
