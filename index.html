@@ -45,12 +45,12 @@ const utf8Encode=new TextEncoder('utf-8');
 let stdinIndex=0;
 let stdOutBytes=[];
 
-function b64encode(str){
-  let x=btoa(str);
-  return x.replace('+','-').replace('/','_');
+function b64encode(str) {
+  let x = btoa(str);
+  return x.replace(/\+/g, '-').replace(/\//g, '_');
 }
-function b64decode(str){
-  x=str.replace('-','+').replace('_','/');
+function b64decode(str) {
+  let x = str.replace(/-/g, '+').replace(/_/g, '/');
   return atob(x);
 }
 if(langParam){
