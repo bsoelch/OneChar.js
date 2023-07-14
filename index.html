@@ -25,6 +25,12 @@
 </body>
 <script src="./OneChar.js"></script>
 <script>
+
+let urlParams=new URLSearchParams((new URL(document.URL)).search);
+let langParam=urlParams.get("lang");
+let inParam=urlParams.get("in");
+let srcParam=urlParams.get("src");
+
 //XXX allow customizing maxDepth/forWhile-mode mode via URL flags
 //XXX show stack and memory
 //XXX allow running program step by step
@@ -38,6 +44,30 @@ const utf8Encode=new TextEncoder('utf-8');
 
 let stdinIndex=0;
 let stdOutBytes=[];
+
+
+if(langParam){
+  switch(langParam.toLowerCase()){
+    case "bf":case "brainfuck":
+      langBrainfuck();
+      break;
+    case "onechar":
+      langOneChar();
+      break;
+    case "forwhile":
+      langForWhile();
+      break;
+    case "brainforwhile":
+      langBrainForWhile();
+      break;
+  }
+}
+if(inParam){
+  stdinArea.value=atob(inParam);
+}
+if(langParam){
+  codeArea.value=atob(srcParam);
+}
 
 function stdinRead(){
   let stdin=Array.from(utf8Encode.encode(stdinArea.value));
