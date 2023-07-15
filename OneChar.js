@@ -20,7 +20,10 @@ function truncateToBits(v){
 function writeMemory(p,v){
   if(bits>0n)
     v=truncateToBits(v);
-  memory.set(p,v);
+  if(v==0n)
+    memory.delete(p);
+  else
+    memory.set(p,v);
 }
 
 function valCount(){
@@ -387,7 +390,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
     case ord('['):
       if((language&LANG_MASK_WHILE_LOOPS)==0)
         break;
-      if(popValue()!=0){
+      if(popValue()!=0n){
         if(language&LANG_FLAG_WHILE){
           callStackPush(ip);
         }
