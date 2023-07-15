@@ -1,6 +1,6 @@
 # OneChar.js
 
-Online interpreter for [OneChar](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
+Online interpreter for [ForWhile](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
 
 ## Usage
 
