@@ -37,9 +37,6 @@ const stdinArea=document.getElementById("input");
 const stdoutArea=document.getElementById("output");
 const codeArea=document.getElementById("codeArea");//use text-area for capturing character input (only way to detect modifier keys)
 
-const utf8Decode=new TextDecoder('utf-8');
-const utf8Encode=new TextEncoder('utf-8');
-
 let stdinIndex=0;
 let stdOutBytes=[];
 
@@ -61,6 +58,10 @@ if(langParam){
       break;
     case "forwhile":
       langForWhile();
+      break;
+    case "forwhile-u32":
+      langForWhile();
+      language|=LANG_CODE_UNICODE;
       break;
     case "brainforwhile":
       langBrainForWhile();

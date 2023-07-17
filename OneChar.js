@@ -3,6 +3,9 @@ let valueStack=[];
 let callStack=[];
 let sourceCode=""
 
+const utf8Decode=new TextDecoder('utf-8');
+const utf8Encode=new TextEncoder('utf-8');
+
 function readMemory(p){
   let x=memory.get(p);
   if(x===undefined)
@@ -78,20 +81,24 @@ function getchar(){
   return BigInt(stdinRead());
 }
 function putchar(c){
-  return stdoutWrite(Number(c));
+  return stdoutWrite(Number(c&0xffn));
 }
 
 function ord(s){
-  return BigInt(s.charCodeAt(0));
+  return BigInt(s.codePointAt(0));
 }
 function loadProgram(code){
+  if(language&LANG_CODE_UNICODE){//UTF-32
+      sourceCode=[...code].map(c=>ord(c));
+    }else{//UTF-8
+      sourceCode=[...utf8Encode.encode(code)].map(c=>BigInt(c))
+    }
   if(language&LANG_FLAG_SELF_MODIFICATION){//load program into memory
     let p=-1n;
-    code.split("").forEach((c)=>{
-      writeMemory(p--,ord(c));
+    sourceCode.forEach((c)=>{
+      writeMemory(p--,c);
     });
   }
-  sourceCode=code;
 }
 
 const BLOCK_TYPE_IF=0;
@@ -150,6 +157,8 @@ const LANG_FLAG_POP_PRINT=0x1000;
 const LANG_FLAG_FLIP=0x2000;
 const LANG_FLAG_NOT=0x4000;
 const LANG_FLAG_FLIP_NEGATIVE_LOOP=0x8000;// swap + and - if loop counter is negative
+const LANG_CODE_UNICODE=0x10000;//read source-code as Unicode code-points instead of bytes
+//XXX? code-point IO
 
 const LANG_MASK_COMPOSITES=LANG_FLAG_COMMENTS|LANG_FLAG_INTS|LANG_FLAG_STRINGS;
 
@@ -224,7 +233,7 @@ function readInstruction(ip){
   ip=-(ip+1n);
   if(ip<0||ip>=sourceCode.length)
     return 0n;
-  return ord(sourceCode[Number(ip)]);
+  return sourceCode[Number(ip)];
 }
 
 function stepProgram(){//XXX? use flipSigns on more instructions
@@ -730,7 +739,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
     case ord('#'):
       if(language&LANG_FLAG_STACK){
         let v=(language&LANG_FLAG_POP_PRINT)?popValue():peekValue();
-        putchar(v&0xffn);
+        putchar(v);
         break;
       }
       break;
