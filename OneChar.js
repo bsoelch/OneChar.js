@@ -446,6 +446,8 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         }else{
           callStackPop();
         }
+      }else if(language&LANG_FLAG_MIXED_LOOPS){
+        callStackPop();
       }
       }break;
     case ord('('):{
