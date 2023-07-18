@@ -475,7 +475,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       if((language&LANG_MASK_FOR_LOOPS)==0)
         break;
       type=callStackPop();
-      if(type!=BLOCK_TYPE_FOR||((language&LANG_FLAG_MIXED_LOOPS)&(type==BLOCK_TYPE_IF))){
+      if(type!=BLOCK_TYPE_FOR&&(((language&LANG_FLAG_MIXED_LOOPS)==0)||(type!=BLOCK_TYPE_IF))){
         running=false;
         console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
       }
