@@ -158,13 +158,14 @@ const LANG_FLAG_FLIP=0x2000;
 const LANG_FLAG_NOT=0x4000;
 const LANG_FLAG_FLIP_NEGATIVE_LOOP=0x8000;// swap + and - if loop counter is negative
 const LANG_CODE_UNICODE=0x10000;//read source-code as Unicode code-points instead of bytes
+const LANG_FLAG_MIXED_LOOPS=0x20000;//allow (] and [) loops
 //XXX? code-point IO
 
 const LANG_MASK_COMPOSITES=LANG_FLAG_COMMENTS|LANG_FLAG_INTS|LANG_FLAG_STRINGS;
 
 //TODO check if languages are working correctly 
 const LANG_ONE_CHAR=LANG_FLAG_STACK|LANG_FLAG_WHILE|LANG_FLAG_FOR|LANG_FLAG_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_POP_PRINT|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION;
-const LANG_FOR_WHILE=LANG_FLAG_STACK|LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLAT_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION;
+const LANG_FOR_WHILE=LANG_FLAG_STACK|LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLAT_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION|LANG_FLAG_MIXED_LOOPS;
 const LANG_BF=LANG_FLAG_WHILE;
 const LANG_BRAIN_FOR_WHILE=LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLIP_NEGATIVE_LOOP;
 let language=LANG_ONE_CHAR;
@@ -317,11 +318,11 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         callStackPush(BLOCK_TYPE_PROC);
         skipCount++;
         break;
-      case ord(']'): // FIXME add support for mixed loops for compatibility with ForWhiles C-implementation
+      case ord(']'):
         if((language&LANG_MASK_WHILE_LOOPS)==0)
           break;
         type=callStackPop();
-        if(type!=BLOCK_TYPE_IF){
+        if(type!=BLOCK_TYPE_IF&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_FOR)){
           running=false;
           console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");return;
         }
@@ -331,7 +332,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         if((language&LANG_MASK_FOR_LOOPS)==0)
           break;
         type=callStackPop();
-        if(type!=BLOCK_TYPE_FOR){
+        if(type!=BLOCK_TYPE_FOR&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_IF)){
           running=false;
           console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
         }
@@ -396,11 +397,15 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       }
       break;
     //control flow
-    case ord('['):
+    case ord('['):{
       if((language&LANG_MASK_WHILE_LOOPS)==0)
         break;
-      if(popValue()!=0n){
-        if(language&LANG_FLAG_WHILE){
+      let n=popValue();
+      if(n!=0n){
+        if(language&LANG_FLAG_MIXED_LOOPS){
+          callStackPush(ip);
+          callStackPush(n);
+        }else if(language&LANG_FLAG_WHILE){
           callStackPush(ip);
         }
         callStackPush(BLOCK_TYPE_IF);
@@ -408,11 +413,28 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         skipCount=1;
         callStackPush(BLOCK_TYPE_IF);
       }
-      break;
-    case ord(']'):
+      }break;
+    case ord(']'):{
       if((language&LANG_MASK_WHILE_LOOPS)==0)
         break;
       type=callStackPop();
+      let n=(language&LANG_FLAG_MIXED_LOOPS)?callStackPop():0;
+      if(type==BLOCK_TYPE_FOR&&(language&LANG_FLAG_MIXED_LOOPS)){
+        let x=(language&LANG_FLAG_FORWHILE)?1n:popValue();
+        n--;
+        if(n>0n&&x!=0n){
+          ip=callStackPeek();
+          callStackPush(n);
+          callStackPush(type);
+          pushValue(n);
+        }else{
+          callStackPop();
+          if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
+            flipSigns=callStackPop();
+          }
+        }
+        break;
+      }
       if(type!=BLOCK_TYPE_IF){
         running=false;
         console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");return;
@@ -425,7 +447,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
           callStackPop();
         }
       }
-      break;
+      }break;
     case ord('('):{
       if((language&LANG_MASK_FOR_LOOPS)==0)
         break;
@@ -453,7 +475,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       if((language&LANG_MASK_FOR_LOOPS)==0)
         break;
       type=callStackPop();
-      if(type!=BLOCK_TYPE_FOR){
+      if(type!=BLOCK_TYPE_FOR||((language&LANG_FLAG_MIXED_LOOPS)&(type==BLOCK_TYPE_IF))){
         running=false;
         console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
       }
@@ -464,11 +486,11 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         ip=callStackPeek();
         callStackPush(n);
         callStackPush(type);
-        if(language&LANG_FLAG_STACK)
+        if((language&LANG_FLAG_STACK)&&type==BLOCK_TYPE_FOR)
           pushValue(n);
       }else{
         callStackPop();//ip
-        if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
+        if((language&LANG_FLAG_FLIP_NEGATIVE_LOOP)&&type==BLOCK_TYPE_FOR){
           flipSigns=callStackPop();
         }
       }
