@@ -245,7 +245,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
   if((language&LANG_FLAG_COMMENTS)&&blockComment){
     if(command!=ord('\\'))
       return;
-    if(command==ord('\\')&&readInstruction(ip--)==ord('\\')&&readInstruction(ip--)==ord('\\')){
+    if(command==ord('\\')&&readInstruction(ip--)==ord('\\')){
       comment=false;
       blockComment=false;
     }
@@ -317,7 +317,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         callStackPush(BLOCK_TYPE_PROC);
         skipCount++;
         break;
-      case ord(']'):
+      case ord(']'): // FIXME add support for mixed loops for compatibility with ForWhiles C-implementation
         if((language&LANG_MASK_WHILE_LOOPS)==0)
           break;
         type=callStackPop();
@@ -355,7 +355,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         if((language&LANG_FLAG_COMMENTS)==0)
           break;
         comment=true;
-        if(readInstruction(ip--)==ord('\\')&&readInstruction(ip--)==ord('\\')){// \\\ -> block comment
+        if(readInstruction(ip--)==ord('\\')){// \\ -> block comment
           blockComment=true;
         }
         break;
@@ -391,7 +391,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       if((language&LANG_FLAG_COMMENTS)==0)
         break;
       comment=true;
-      if(readInstruction(ip--)==ord('\\')&&readInstruction(ip--)==ord('\\')){// \\\ -> block comment
+      if(readInstruction(ip--)==ord('\\')){// \\ -> block comment
         blockComment=true;
       }
       break;
