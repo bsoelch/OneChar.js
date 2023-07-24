@@ -78,7 +78,7 @@ if(srcParam){
 function stdinRead(){
   let stdin=Array.from(utf8Encode.encode(stdinArea.value));
   if(stdinIndex>=stdin.length)
-    return -1;
+    return EOF;
   return stdin[stdinIndex++];
 }
 function stdinUnread(){

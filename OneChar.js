@@ -2,6 +2,7 @@ let memory=new Map();
 let valueStack=[];
 let callStack=[];
 let sourceCode=""
+let EOF=-1n;
 
 const utf8Decode=new TextDecoder('utf-8');
 const utf8Encode=new TextEncoder('utf-8');
@@ -174,18 +175,22 @@ let bits=0n;
 function langOneChar(){
   language=LANG_ONE_CHAR;
   bits=0n;
+  EOF=-1n;
 }
 function langForWhile(){
   language=LANG_FOR_WHILE;
   bits=0n;
+  EOF=-1n;
 }
 function langBrainfuck(){
   language=LANG_BF;
   bits=8n;
+  EOF=0n;
 }
 function langBrainForWhile(){
   language=LANG_BRAIN_FOR_WHILE;
   bits=0n;
+  EOF=0n;
 }
 langForWhile();
 
