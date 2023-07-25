@@ -38,19 +38,19 @@ function pushValue(val){
     val=truncateToBits(val);
   if(val!==BigInt(val))
     throw "No int";
-  if((language&LANG_FLAG_STACK)==0)
+  if(interpreter==INTERPRETER_BF)
     return writeMemory(mp,val);
   valueStack.push(val);
 }
 function popValue(val){
-  if((language&LANG_FLAG_STACK)==0)
+  if(interpreter==INTERPRETER_BF)
     return readMemory(mp);
   if(valueStack.length<=0)
     return 0n;
   return valueStack.pop();
 }
 function peekValue(val){
-  if((language&LANG_FLAG_STACK)==0)
+  if(interpreter==INTERPRETER_BF)
     return readMemory(mp);
   if(valueStack.length<=0)
     return 0n;
@@ -141,7 +141,10 @@ function rshift(a,b){
   }
 }
 
-const LANG_FLAG_STACK=0x1;
+const INTERPRETER_ONECHAR=0;
+const INTERPRETER_BF=1;
+const INTERPRETER_ITRLANG=2;
+
 const LANG_MASK_WHILE_LOOPS=0xc;
 const LANG_FLAG_WHILE=0x4;
 const LANG_FLAG_IF=0x8;
@@ -165,30 +168,41 @@ const LANG_FLAG_MIXED_LOOPS=0x20000;//allow (] and [) loops
 const LANG_MASK_COMPOSITES=LANG_FLAG_COMMENTS|LANG_FLAG_INTS|LANG_FLAG_STRINGS;
 
 //TODO check if languages are working correctly 
-const LANG_ONE_CHAR=LANG_FLAG_STACK|LANG_FLAG_WHILE|LANG_FLAG_FOR|LANG_FLAG_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_POP_PRINT|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION;
-const LANG_FOR_WHILE=LANG_FLAG_STACK|LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLAT_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION|LANG_FLAG_MIXED_LOOPS;
+const LANG_ONE_CHAR=LANG_FLAG_WHILE|LANG_FLAG_FOR|LANG_FLAG_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_POP_PRINT|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION;
+const LANG_FOR_WHILE=LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLAT_PROCS|LANG_MASK_COMPOSITES|LANG_FLAG_NOT|LANG_FLAG_FLIP|LANG_FLAG_SELF_MODIFICATION|LANG_FLAG_MIXED_LOOPS;
 const LANG_BF=LANG_FLAG_WHILE;
 const LANG_BRAIN_FOR_WHILE=LANG_FLAG_IF|LANG_FLAG_FORWHILE|LANG_FLAG_FLIP_NEGATIVE_LOOP;
 let language=LANG_ONE_CHAR;
+let interpreter=INTERPRETER_ONECHAR;
 let bits=0n;
 
 function langOneChar(){
+  interpreter=INTERPRETER_ONECHAR;
   language=LANG_ONE_CHAR;
   bits=0n;
   EOF=-1n;
 }
 function langForWhile(){
+  interpreter=INTERPRETER_ONECHAR;
   language=LANG_FOR_WHILE;
   bits=0n;
   EOF=-1n;
 }
 function langBrainfuck(){
+  interpreter=INTERPRETER_BF;
   language=LANG_BF;
   bits=8n;
   EOF=0n;
 }
 function langBrainForWhile(){
+  interpreter=INTERPRETER_BF;
   language=LANG_BRAIN_FOR_WHILE;
+  bits=0n;
+  EOF=0n;
+}
+function itrLang(){
+  interpreter=INTERPRETER_ITRLANG;
+  language=0;
   bits=0n;
   EOF=0n;
 }
@@ -242,31 +256,11 @@ function readInstruction(ip){
   return sourceCode[Number(ip)];
 }
 
-function stepProgram(){//XXX? use flipSigns on more instructions
-  command=readInstruction(ip--)&0xffn;
-  if(command==ord('\0')){
-    running=false;
-    return;//reached end of program
-  }
-  if((language&LANG_FLAG_COMMENTS)&&blockComment){
-    if(command!=ord('\\'))
-      return;
-    if(command==ord('\\')&&readInstruction(ip--)==ord('\\')){
-      comment=false;
-      blockComment=false;
-    }
-    return;
-  }
-  if((language&LANG_FLAG_COMMENTS)&&comment){
-    if(command==ord('\n'))
-      comment=false;
-    return;
-  }
-  if((language&LANG_FLAG_STRINGS)&&stringMode){
+function readStringChar(command){
     if(escapeMode){
       escapeMode=false;
       if(skipCount>0)
-        return;//string in skipped loop
+        return false;//string in skipped loop
       switch(command){
       case ord('"'):
         pushValue(ord('"'));
@@ -292,80 +286,240 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       stringMode=false;
       if(skipCount>0)
         return;//string in skipped loop
-      let tmp=((language&LANG_FLAG_STACK)?valCount():mp)-callStackPop();
-      pushValue(BigInt(tmp));
+      return true;
     }else{
       if(skipCount>0)
-        return;//string in skipped loop
+        return false;//string in skipped loop
       pushValue(command);
     }
-    if(stringMode&(language&LANG_FLAG_STACK)==0)
-      mp++;//increment memory pointer
+    return false;
+}
+function skipLoop(command){
+  switch(command){
+    case ord('['):
+      if((language&LANG_MASK_WHILE_LOOPS)==0)
+        break;
+      callStackPush(BLOCK_TYPE_IF);
+      skipCount++;
+      break;
+    case ord('('):
+      if((language&LANG_MASK_FOR_LOOPS)==0)
+        break;
+      callStackPush(BLOCK_TYPE_FOR);
+      skipCount++;
+      break;
+    case ord('{'):
+      if((language&LANG_FLAG_PROCS)==0)
+        break;
+      callStackPush(BLOCK_TYPE_PROC);
+      skipCount++;
+      break;
+    case ord(']'):
+      if((language&LANG_MASK_WHILE_LOOPS)==0)
+        break;
+      type=callStackPop();
+      if(type!=BLOCK_TYPE_IF&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_FOR)){
+        running=false;
+        console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");return;
+      }
+      skipCount--;
+      break;
+    case ord(')'):
+      if((language&LANG_MASK_FOR_LOOPS)==0)
+        break;
+      type=callStackPop();
+      if(type!=BLOCK_TYPE_FOR&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_IF)){
+        running=false;
+        console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
+      }
+      skipCount--;
+      break;
+    case ord('}'):
+      if((language&LANG_FLAG_PROCS)==0)
+        break;
+      type=callStackPeek();
+      if(type==BLOCK_TYPE_PROC){// } only closes current procedure when it is not contained in sub-block
+        callStackPop();
+        skipCount--;
+      }
+      break;
+    case ord('"'):
+      if((language&LANG_FLAG_STRINGS)==0)
+        break;
+      stringMode=true;
+      break;
+    case ord('\\'):
+      if((language&LANG_FLAG_COMMENTS)==0)
+        break;
+      comment=true;
+      if(readInstruction(ip--)==ord('\\')){// \\ -> block comment
+        blockComment=true;
+      }
+      break;
+  }
+}
+function whileLoopStart(){
+  if((language&LANG_MASK_WHILE_LOOPS)==0)
+    return;
+  let n=popValue();
+  if(n!=0n){
+    if(language&LANG_FLAG_MIXED_LOOPS){
+      callStackPush(ip);
+      callStackPush(n);
+    }else if(language&LANG_FLAG_WHILE){
+      callStackPush(ip);
+    }
+    callStackPush(BLOCK_TYPE_IF);
+  }else{
+    skipCount=1;
+    callStackPush(BLOCK_TYPE_IF);
+  }
+}
+function whileLoopEnd(){
+  if((language&LANG_MASK_WHILE_LOOPS)==0)
+    return;
+  type=callStackPop();
+  let n=(language&LANG_FLAG_MIXED_LOOPS)?callStackPop():0;
+  if(type==BLOCK_TYPE_FOR&&(language&LANG_FLAG_MIXED_LOOPS)){
+    let x=(language&LANG_FLAG_FORWHILE)?1n:popValue();
+    n--;
+    if(n>0n&&x!=0n){
+      ip=callStackPeek();
+      callStackPush(n);
+      callStackPush(type);
+      pushValue(n);
+    }else{
+      callStackPop();
+      if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
+        flipSigns=callStackPop();
+      }
+    }
+    return;
+  }
+  if(type!=BLOCK_TYPE_IF){
+    running=false;
+    console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");
+    return;
+  }
+  if(language&LANG_FLAG_WHILE){
+    if(popValue()!=0n){
+      ip=callStackPeek();
+      callStackPush(type);
+    }else{
+      callStackPop();
+    }
+  }else if(language&LANG_FLAG_MIXED_LOOPS){
+    callStackPop();
+  }
+}
+function forLoopStart(){
+  if((language&LANG_MASK_FOR_LOOPS)==0)
+      return;
+    let n=popValue();
+    if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
+      if(n!=0n)//don't push old sign if n==0
+        callStackPush(flipSigns);
+      if(n<0n){
+        flipSigns=!flipSigns;
+        n=-n;
+      }
+    }
+    if(n>0n){
+      callStackPush(ip);
+      callStackPush(n);
+      callStackPush(BLOCK_TYPE_FOR);
+      if(interpreter==INTERPRETER_ONECHAR)
+        pushValue(n);
+    }else{
+      skipCount=1;
+      callStackPush(BLOCK_TYPE_FOR);
+    }
+}
+function forLoopEnd(){
+  if((language&LANG_MASK_FOR_LOOPS)==0)
+    return;
+  type=callStackPop();
+  if(type!=BLOCK_TYPE_FOR&&(((language&LANG_FLAG_MIXED_LOOPS)==0)||(type!=BLOCK_TYPE_IF))){
+    running=false;
+    console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");
+    return;
+  }
+  let n=callStackPop();
+  let x=(language&LANG_FLAG_FORWHILE)?popValue():1n;
+  n--;
+  if(x!=0n&&n>0n){
+    ip=callStackPeek();
+    callStackPush(n);
+    callStackPush(type);
+    if(interpreter==INTERPRETER_ONECHAR&&type==BLOCK_TYPE_FOR)
+      pushValue(n);
+  }else{
+    callStackPop();//ip
+    if((language&LANG_FLAG_FLIP_NEGATIVE_LOOP)&&type==BLOCK_TYPE_FOR){
+      flipSigns=callStackPop();
+    }
+  }
+}
+function procEnd(){
+  if((language&LANG_FLAG_PROCS)==0)
+    return;
+  do{
+    if(callStackEmpty()){
+      console.error("unexpected '}'\n");
+      running=false;
+      return;
+    }
+    type=callStackPop();//pop blocks until {} block is reached
+    switch(type){//pop remaining values in block
+      case BLOCK_TYPE_PROC:
+        break;
+      case BLOCK_TYPE_IF:
+        if(language&LANG_FLAG_MIXED_LOOPS){
+          callStackPop();
+          callStackPop();
+        }else if((language&LANG_FLAG_WHILE)){
+          callStackPop();
+        }
+        break;
+      case BLOCK_TYPE_FOR:
+        callStackPop();
+        callStackPop();
+        break;
+    }
+  }while(type!=BLOCK_TYPE_PROC);
+  ip=callStackPop();//return
+  callDepth--;
+}
+
+function oneChar_stepProgram(){//XXX? use flipSigns on more instructions
+  command=readInstruction(ip--)&0xffn;
+  if(command==ord('\0')){
+    running=false;
+    return;//reached end of program
+  }
+  if((language&LANG_FLAG_COMMENTS)&&blockComment){
+    if(command!=ord('\\'))
+      return;
+    if(command==ord('\\')&&readInstruction(ip--)==ord('\\')){
+      comment=false;
+      blockComment=false;
+    }
+    return;
+  }
+  if((language&LANG_FLAG_COMMENTS)&&comment){
+    if(command==ord('\n'))
+      comment=false;
+    return;
+  }
+  if((language&LANG_FLAG_STRINGS)&&stringMode){
+    if(readStringChar(command)){
+      let tmp=valCount()-callStackPop();
+      pushValue(BigInt(tmp));
+    }
     return;
   }
   if(skipCount>0){
-    switch(command){
-      case ord('['):
-        if((language&LANG_MASK_WHILE_LOOPS)==0)
-          break;
-        callStackPush(BLOCK_TYPE_IF);
-        skipCount++;
-        break;
-      case ord('('):
-        if((language&LANG_MASK_FOR_LOOPS)==0)
-          break;
-        callStackPush(BLOCK_TYPE_FOR);
-        skipCount++;
-        break;
-      case ord('{'):
-        if((language&LANG_FLAG_PROCS)==0)
-          break;
-        callStackPush(BLOCK_TYPE_PROC);
-        skipCount++;
-        break;
-      case ord(']'):
-        if((language&LANG_MASK_WHILE_LOOPS)==0)
-          break;
-        type=callStackPop();
-        if(type!=BLOCK_TYPE_IF&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_FOR)){
-          running=false;
-          console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");return;
-        }
-        skipCount--;
-        break;
-      case ord(')'):
-        if((language&LANG_MASK_FOR_LOOPS)==0)
-          break;
-        type=callStackPop();
-        if(type!=BLOCK_TYPE_FOR&&((language&LANG_FLAG_MIXED_LOOPS)==0||type!=BLOCK_TYPE_IF)){
-          running=false;
-          console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
-        }
-        skipCount--;
-        break;
-      case ord('}'):
-        if((language&LANG_FLAG_PROCS)==0)
-          break;
-        type=callStackPeek();
-        if(type==BLOCK_TYPE_PROC){// } only closes current procedure when it is not contained in sub-block
-          callStackPop();
-          skipCount--;
-        }
-        break;
-      case ord('"'):
-        if((language&LANG_FLAG_STRINGS)==0)
-          break;
-        stringMode=true;
-        break;
-      case ord('\\'):
-        if((language&LANG_FLAG_COMMENTS)==0)
-          break;
-        comment=true;
-        if(readInstruction(ip--)==ord('\\')){// \\ -> block comment
-          blockComment=true;
-        }
-        break;
-    }
+    skipLoop(command);
     return;
   }
   if(language&LANG_FLAG_INTS){
@@ -390,7 +544,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
     case ord('"'):
       if((language&LANG_FLAG_STRINGS)==0)
         break;
-      callStackPush((language&LANG_FLAG_STACK)?valCount():mp);
+      callStackPush(valCount());
       stringMode=true;
       break;
     case ord('\\'):
@@ -402,106 +556,18 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       }
       break;
     //control flow
-    case ord('['):{
-      if((language&LANG_MASK_WHILE_LOOPS)==0)
-        break;
-      let n=popValue();
-      if(n!=0n){
-        if(language&LANG_FLAG_MIXED_LOOPS){
-          callStackPush(ip);
-          callStackPush(n);
-        }else if(language&LANG_FLAG_WHILE){
-          callStackPush(ip);
-        }
-        callStackPush(BLOCK_TYPE_IF);
-      }else{
-        skipCount=1;
-        callStackPush(BLOCK_TYPE_IF);
-      }
-      }break;
-    case ord(']'):{
-      if((language&LANG_MASK_WHILE_LOOPS)==0)
-        break;
-      type=callStackPop();
-      let n=(language&LANG_FLAG_MIXED_LOOPS)?callStackPop():0;
-      if(type==BLOCK_TYPE_FOR&&(language&LANG_FLAG_MIXED_LOOPS)){
-        let x=(language&LANG_FLAG_FORWHILE)?1n:popValue();
-        n--;
-        if(n>0n&&x!=0n){
-          ip=callStackPeek();
-          callStackPush(n);
-          callStackPush(type);
-          pushValue(n);
-        }else{
-          callStackPop();
-          if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
-            flipSigns=callStackPop();
-          }
-        }
-        break;
-      }
-      if(type!=BLOCK_TYPE_IF){
-        running=false;
-        console.error("unexpected ']' in '"+blockTypeName(type)+"' block\n");return;
-      }
-      if(language&LANG_FLAG_WHILE){
-        if(popValue()!=0n){
-          ip=callStackPeek();
-          callStackPush(type);
-        }else{
-          callStackPop();
-        }
-      }else if(language&LANG_FLAG_MIXED_LOOPS){
-        callStackPop();
-      }
-      }break;
-    case ord('('):{
-      if((language&LANG_MASK_FOR_LOOPS)==0)
-        break;
-      let n=popValue();
-      if(language&LANG_FLAG_FLIP_NEGATIVE_LOOP){
-        if(n!=0n)//don't push old sign if n==0
-          callStackPush(flipSigns);
-        if(n<0n){
-          flipSigns=!flipSigns;
-          n=-n;
-        }
-      }
-      if(n>0n){
-        callStackPush(ip);
-        callStackPush(n);
-        callStackPush(BLOCK_TYPE_FOR);
-        if(language&LANG_FLAG_STACK)
-          pushValue(n);
-      }else{
-        skipCount=1;
-        callStackPush(BLOCK_TYPE_FOR);
-      }
-      }break;
-    case ord(')'):{
-      if((language&LANG_MASK_FOR_LOOPS)==0)
-        break;
-      type=callStackPop();
-      if(type!=BLOCK_TYPE_FOR&&(((language&LANG_FLAG_MIXED_LOOPS)==0)||(type!=BLOCK_TYPE_IF))){
-        running=false;
-        console.error("unexpected ')' in '"+blockTypeName(type)+"' block\n");return;
-      }
-      let n=callStackPop();
-      let x=(language&LANG_FLAG_FORWHILE)?popValue():1n;
-      n--;
-      if(x!=0n&&n>0n){
-        ip=callStackPeek();
-        callStackPush(n);
-        callStackPush(type);
-        if((language&LANG_FLAG_STACK)&&type==BLOCK_TYPE_FOR)
-          pushValue(n);
-      }else{
-        callStackPop();//ip
-        if((language&LANG_FLAG_FLIP_NEGATIVE_LOOP)&&type==BLOCK_TYPE_FOR){
-          flipSigns=callStackPop();
-        }
-      }
-      }break;
+    case ord('['):
+      whileLoopStart();
+      break;
+    case ord(']'):
+      whileLoopEnd();
+      break;
+    case ord('('):
+      forLoopStart();
+      break;
+    case ord(')'):
+      forLoopEnd();
+      break;
     case ord('{'):
       if((language&LANG_FLAG_PROCS)==0)
         break;
@@ -510,31 +576,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       callStackPush(BLOCK_TYPE_PROC);
       break;
     case ord('}'):
-      if((language&LANG_FLAG_PROCS)==0)
-        break;
-      do{
-        if(callStackEmpty()){
-          console.error("unexpected '}'\n");
-          runnint=false;
-          return;
-        }
-        type=callStackPop();//pop blocks until {} block is reached
-        switch(type){//pop remaining values in block
-          case BLOCK_TYPE_PROC:
-            break;
-          case BLOCK_TYPE_IF:
-            if(language==LANG_ONE_CHAR){
-              callStackPop();
-            }
-            break;
-          case BLOCK_TYPE_FOR:
-            callStackPop();
-            callStackPop();
-            break;
-        }
-      }while(type!=BLOCK_TYPE_PROC);
-      ip=callStackPop();//return
-      callDepth--;
+      procEnd();
       break;
     case ord('?'):{
       if((language&LANG_FLAG_PROCS)==0)
@@ -549,22 +591,14 @@ function stepProgram(){//XXX? use flipSigns on more instructions
       }break;
     //stack manipulation
     case ord('.'):;//drop   ## a ->
-      if(language&LANG_FLAG_STACK){
-        popValue();
-      }else{
-        let v=(language&LANG_FLAG_POP_PRINT)?popValue():peekValue();
-        putchar(v&0xffn);
-      }
+      popValue();
       break;
-    case ord(':'):
-      if(language&LANG_FLAG_STACK){//dup   ## a -> a
+    case ord(':'):{//dup   ## a -> a
         let a=peekValue();
         pushValue(a);
         break;
       }
-      break;
-    case ord('\''):
-      if(language&LANG_FLAG_STACK){//swap ## b a -> a b
+    case ord('\''):{//swap ## b a -> a b
         let b=popValue();
         let a=popValue();
         //re-definable combinations '+ '* '& '| '^ '=  '' as modifier
@@ -582,8 +616,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         break;
       }
       break;
-    case ord(';'):
-      if(language&LANG_FLAG_STACK){//over ## c b a -> c b a c
+    case ord(';'):{//over ## c b a -> c b a c
         let a=popValue();
         let c=peekValue();
         pushValue(a);
@@ -591,8 +624,7 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         break;
       }
       break;
-    case ord(','):
-      if(language&LANG_FLAG_STACK){//rotate .. ## a b c -> b c a
+    case ord(','):{//rotate .. ## a b c -> b c a
         let count=Number(popValue());
         if(count==0)
           break;
@@ -620,125 +652,243 @@ function stepProgram(){//XXX? use flipSigns on more instructions
           }
           valueStack[valueStack.length-count]=a;
         }
-      }else{//no stack -> bf IO
-        pushValue(getchar());
       }
       break;
     //memory
-    case ord('@'):
-      if(language&LANG_FLAG_STACK){
+    case ord('@'):{
         let addr=popValue();
         pushValue(readMemory(addr));
         break;
       }
-      break;
-    case ord('$'):
-      if(language&LANG_FLAG_STACK){
+    case ord('$'):{
         let addr=popValue();
         writeMemory(addr,popValue());
         break;
       }
-      break;
     //arithmetic operations
-    case ord('+'):
-      if(language&LANG_FLAG_STACK){
+    case ord('+'):{
         let b=popValue();
         let a=popValue();
         pushValue(a+b);
         break;
       }
-      writeMemory(mp,readMemory(mp)+(flipSigns?-1n:1n));
-      break;
-    case ord('-'):
-      if(language&LANG_FLAG_STACK){
+    case ord('-'):{
         let b=popValue();
         let a=popValue();
         pushValue(a-b);
         break;
       }
-      writeMemory(mp,readMemory(mp)-(flipSigns?-1n:1n));
-      break;
-    case ord('*'):
-      if(language&LANG_FLAG_STACK){
+    case ord('*'):{
         let b=popValue();
         let a=popValue();
         pushValue(a*b);
         break;
       }
-      break;
-    case ord('/'):
-      if(language&LANG_FLAG_STACK){
+    case ord('/'):{
         let b=popValue();
         let a=popValue();
         pushValue(b==0n?0n:a/b);
         break;
       }
-      break;
-    case ord('%'):
-      if(language&LANG_FLAG_STACK){
+    case ord('%'):{
         let b=popValue();
         let a=popValue();
         pushValue(b==0n?a:a%b);
         break;
       }
-      break;
-    case ord('>'):
-      if(language&LANG_FLAG_STACK){
+    case ord('>'):{
         let b=popValue();
         let a=popValue();
         pushValue(a>b?1n:0n);
         break;
       }
-      mp++;
-      break;
-    case ord('<'):
-      if(language&LANG_FLAG_STACK){
+    case ord('<'):{
         let b=popValue();
         let a=popValue();
         pushValue(a<b?1n:0n);
         break;
       }
-      mp--;
-      break;
-    case ord('='):
-      if(language&LANG_FLAG_STACK){
+    case ord('='):{
         let b=popValue();
         let a=popValue();
         pushValue(a==b?1n:0n);
         break;
       }
-      break;
-    case ord('&'):
-      if(language&LANG_FLAG_STACK){
+    case ord('&'):{
         let b=popValue();
         let a=popValue();
         pushValue(a&b);
         break;
       }
-      break;
-    case ord('|'):
-      if(language&LANG_FLAG_STACK){
+    case ord('|'):{
         let b=popValue();
         let a=popValue();
         pushValue(a|b);
         break;
       }
-      break;
-    case ord('^'):
-      if(language&LANG_FLAG_STACK){
+    case ord('^'):{
         let b=popValue();
         let a=popValue();
         pushValue(a^b);
         break;
       }
-      break;
-    case ord('`'):
-      if(language&LANG_FLAG_STACK){
+    case ord('`'):{
         let b=popValue();
         let a=popValue();
         pushValue(ipow(a,b));
         break;
       }
+    case ord('!'):
+      if(language&LANG_FLAG_NOT){
+        let a=popValue();
+        pushValue(a==0n?1n:0n);
+        break;
+      }
+      break;
+    case ord('~'):
+      if(language&LANG_FLAG_FLIP){
+        let a=popValue();
+        if(readInstruction(ip)==ord('~')){//~~ would have has no effect -> use combination for negation
+          ip--;
+          pushValue(-a);
+          break;
+        }
+        pushValue(~a);
+        break;
+      }
+      break;
+    case ord('_'):{
+        pushValue(getchar());
+        break;
+      }
+    case ord('#'):{
+        let v=(language&LANG_FLAG_POP_PRINT)?popValue():peekValue();
+        putchar(v);
+        break;
+      }
+    default:
+      break;
+  }
+}
+function bf_stepProgram(){//XXX? use flipSigns on more instructions
+  command=readInstruction(ip--)&0xffn;
+  if(command==ord('\0')){
+    running=false;
+    return;//reached end of program
+  }
+  if((language&LANG_FLAG_COMMENTS)&&blockComment){
+    if(command!=ord('\\'))
+      return;
+    if(command==ord('\\')&&readInstruction(ip--)==ord('\\')){
+      comment=false;
+      blockComment=false;
+    }
+    return;
+  }
+  if((language&LANG_FLAG_COMMENTS)&&comment){
+    if(command==ord('\n'))
+      comment=false;
+    return;
+  }
+  if((language&LANG_FLAG_STRINGS)&&stringMode){
+    if(readStringChar(command)){
+      let tmp=valCount()-callStackPop();
+      pushValue(BigInt(tmp));
+    }
+    mp++;//increment memory pointer
+    return;
+  }
+  if(skipCount>0){
+    skipLoop(command);
+    return;
+  }
+  if(language&LANG_FLAG_INTS){
+    if(command>=ord('0')&&command<=ord('9')){
+      if(numberMode){
+        let v=popValue();
+        pushValue(10n*v+command-ord('0'));
+      }else{
+        pushValue(command-ord('0'));
+        numberMode=true;
+      }
+      return;
+    }
+    numberMode=false;
+  }
+  switch(command){
+    case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
+    case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
+    case ord(' ')://ignore spaces
+      break;
+    //strings&comments
+    case ord('"'):
+      if((language&LANG_FLAG_STRINGS)==0)
+        break;
+      callStackPush(mp);
+      stringMode=true;
+      break;
+    case ord('\\'):
+      if((language&LANG_FLAG_COMMENTS)==0)
+        break;
+      comment=true;
+      if(readInstruction(ip--)==ord('\\')){// \\ -> block comment
+        blockComment=true;
+      }
+      break;
+    //control flow
+    case ord('['):
+      whileLoopStart();
+      break;
+    case ord(']'):
+      whileLoopEnd();
+      break;
+    case ord('('):
+      forLoopStart();
+      break;
+    case ord(')'):
+      forLoopEnd();
+      break;
+    case ord('{'):
+      if((language&LANG_FLAG_PROCS)==0)
+        break;
+      pushValue(ip);
+      skipCount=1;
+      callStackPush(BLOCK_TYPE_PROC);
+      break;
+    case ord('}'):
+      procEnd();
+      break;
+    case ord('?'):{
+      if((language&LANG_FLAG_PROCS)==0)
+        break;
+      let to=popValue();
+      if(((language&LANG_FLAG_FLAT_PROCS)==0)||callDepth<maxCallDepth){
+        callStackPush(ip);
+        callStackPush(BLOCK_TYPE_PROC);
+        callDepth++;
+        ip=to;
+      }
+      }break;
+    //stack manipulation
+    case ord('.'):{
+      let v=(language&LANG_FLAG_POP_PRINT)?popValue():peekValue();
+      putchar(v&0xffn);
+      }break;
+    case ord(','):{
+        pushValue(getchar());
+      }
+      break;
+    case ord('+'):
+      writeMemory(mp,readMemory(mp)+(flipSigns?-1n:1n));
+      break;
+    case ord('-'):
+      writeMemory(mp,readMemory(mp)-(flipSigns?-1n:1n));
+      break;
+    case ord('>'):
+      mp++;
+      break;
+    case ord('<'):
+      mp--;
       break;
     case ord('!'):
       if(language&LANG_FLAG_NOT){
@@ -759,22 +909,38 @@ function stepProgram(){//XXX? use flipSigns on more instructions
         break;
       }
       break;
-    case ord('_'):
-      if(language&LANG_FLAG_STACK){
-        pushValue(getchar());
-        break;
-      }
-      break;
-    case ord('#'):
-      if(language&LANG_FLAG_STACK){
-        let v=(language&LANG_FLAG_POP_PRINT)?popValue():peekValue();
-        putchar(v);
-        break;
-      }
-      break;
     default:
       break;
   }
+}
+function itrLang_stepProgram(){
+  command=readInstruction(ip--)&0xffn;
+  if(command==ord('\0')){
+    running=false;
+    return;//reached end of program
+  }
+  //TODO implement itrLang
+  // itr -> "Intger,Tuple,Rational" / ITeRator
+  /* stack types: unbounded integer, tuple, rational, real,  gaussian rational, complex
+  init stack: ( (source-code) (std-in) (main-stack) )
+                                        ^
+  */
+  running=false;
+}
+function stepProgram(){
+  if(interpreter==INTERPRETER_ONECHAR){
+    oneChar_stepProgram();
+    return;
+  }
+  if(interpreter==INTERPRETER_BF){
+    bf_stepProgram();
+    return;
+  }
+  if(interpreter==INTERPRETER_ITRLANG){
+    itrLang_stepProgram();
+    return;
+  }
+  running=false;
 }
 
 //XXX? run program asynchronously 
@@ -790,5 +956,5 @@ window.addEventListener(//post message is faster than setTimeout/setInterval
   false
 );
 function runProgram(){
-  postMessage(progId);
+  postMessage(++progId);
 }
