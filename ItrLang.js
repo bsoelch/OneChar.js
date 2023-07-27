@@ -18,6 +18,23 @@ class Matrix{
     return s.substring(0,s.length-1)+")";
   }
 }
+function itrLang_mmult(A,B){
+  if(!(A instanceof Matrix&&B instanceof Matrix))
+    throw `unsupported types for matrix multiplication: ${A.constructor.name} and ${B.constructor.name}`;
+  let res=new Array(A.nrows);
+  for(let r=0;r<A.nrows;r++){
+    res[r]=new Array(B.ncolums);
+    res[r].fill(0n);
+    for(let k=0;k<A.ncolums||k<B.nrows;k++){
+      for(let c=0;c<B.ncolums;c++){
+        res[r][c]+=A.at(r,k)*B.at(k,c);
+      }
+    }
+  }
+  return new Matrix(res);
+}
+//TODO minv,mldiv,mrdiv,mexp,mlog,mpow
+
 function itrLang_popStack(){
   if(stackStack.length>0)
     return stackStack.pop();
@@ -56,14 +73,32 @@ function itrLang_ismatrix(e){
     return true;
   return e instanceof Matrix;
 }
+
 function itrLang_asArray(x){
   if(x instanceof Array)
     return x;
   return [x];
 }
+function itrLang_asBool(a){
+  if(typeof a === "bigint"){
+    return a!=0;
+  }
+  if(itrLang_ismatrix(a)){
+    isTrue=false;
+    a.rows.forEach(r=>r.forEach(e=>isTrue|=itrLang_asBool(e)));
+    return isTrue;
+  }
+  if(a instanceof Array){
+    isTrue=false;
+    a.forEach(e=>isTrue|=itrLang_asBool(e));
+    return isTrue;
+  }
+  throw `unsupported type for unary operation: ${a.constructor.name}`;
+}
+
 function unaryMatrixOp(M,f){
   if(!(M instanceof Matrix))
-    throw `unsupported types for matrix operation: ${a.constructor.name}`;
+    throw `unsupported type for matrix operation: ${a.constructor.name}`;
   let res=new Array(M.nrows);
   for(let i=0;i<M.nrows;i++){
     res[i]=new Array(M.ncolums);
@@ -100,90 +135,65 @@ function pointwiseMatrixOp(a,b,f){
   }
   throw `unsupported types for matrix operation: ${a.constructor.name} and ${b.constructor.name}`;
 }
-function itrLang_add(a,b){
-  if(typeof a === "bigint"&&typeof b === "bigint"){//XXX other number types
-    return a+b;
-  }
-  if(itrLang_ismatrix(a)&&itrLang_ismatrix(b)){
-    return pointwiseMatrixOp(a,b,(x,y)=>itrLang_add(x,y));
-  }
-  if(a instanceof Array&&b instanceof Array){
-    return a.concat(b);
-  }
-  if(a instanceof Array||b instanceof Array){
-    let array=itrLang_asArray(a);
-    return array.concat(itrLang_asArray(b));
-  }
-  throw `incompatible types for addition: ${a.constructor.name} and ${b.constructor.name}`;
-}
-function itrLang_subtract(a,b){
-  if(typeof a === "bigint"&&typeof b === "bigint"){
-    return a-b;
-  }
-  if(itrLang_ismatrix(a)&&itrLang_ismatrix(b)){
-    return pointwiseMatrixOp(a,b,(x,y)=>itrLang_minus(x,y));
-  }
-  if(a instanceof Array||b instanceof Array){
-    let res=[];let arrayB=itrLang_asArray(b);
-    itrLang_asArray(a).forEach(e=>{if(arrayB.indexOf(e)<0)res.push(e);});
-    return res;
-  }
-  throw `incompatible types for subtraction: ${a.constructor.name} and ${b.constructor.name}`;
-}
-function itrLang_compare(a,b,cond){
-  if(typeof a === "bigint"&&typeof b === "bigint"){
-    return cond(a-b);
-  }
-  if(itrLang_ismatrix(a)&&itrLang_ismatrix(b)){
-    return pointwiseMatrixOp(a,b,(x,y)=>itrLang_compare(x,y,cond));
-  }
-  //TODO array comparison (lexicographical)
-  throw `incompatible types for comparison: ${a.constructor.name} and ${b.constructor.name}`;
-}
-function itrLang_asBool(a){
-  if(typeof a === "bigint"){
-    return a!=0;
+
+function itrLang_unaryNumberOp(a,f){
+  if(itrLang_isnumber(a)){
+    return f(a);
   }
   if(itrLang_ismatrix(a)){
-    isTrue=false;
-    a.rows.forEach(r=>r.forEach(e=>isTrue|=itrLang_asBool(e)));
-    return isTrue;
-  }
-  if(a instanceof Array){
-    isTrue=false;
-    a.forEach(e=>isTrue|=itrLang_asBool(e));
-    return isTrue;
-  }
-  throw `unsupported type for unary operation: ${a.constructor.name}`;
-}
-function itrLang_not(a){
-  if(typeof a === "bigint"){
-    return BigInt(a==0n);
-  }
-  if(itrLang_ismatrix(a)){
-    return unaryMatrixOp(a,x=>itrLang_not(x));
+    return unaryMatrixOp(a,x=>itrLang_unaryNumberOp(x,f));
   }
   if(a instanceof Array){
     let res=[];
-    itrLang_asArray(a).forEach(e=>res.push(itrLang_not(e)));
+    itrLang_asArray(a).forEach(e=>res.push(itrLang_unaryNumberOp(e,f)));
     return res;
   }
   throw `unsupported type for unary operation: ${a.constructor.name}`;
 }
-function itrLang_negate(a){
-  if(typeof a === "bigint"){
-    return -a;
+function itrLang_binaryNumberOp(a,b,f){
+  if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
+    return f(a,b);
   }
-  if(itrLang_ismatrix(a)){
-    return unaryMatrixOp(a,x=>itrLang_negate(x));
+  if(itrLang_ismatrix(a)&&itrLang_ismatrix(b)){
+    return pointwiseMatrixOp(a,b,(x,y)=>itrLang_binaryNumberOp(x,y,f));
   }
-  if(a instanceof Array){
-    let res=[];
-    itrLang_asArray(a).forEach(e=>res.push(itrLang_negate(e)));
+  if(a instanceof Array||b instanceof Array){
+    let arrayA=itrLang_asArray(a),arrayB=itrLang_asArray(b),res=new Array(Math.max(arrayA.length,arrayB.length));
+    for(let i=0;i<arrayA.length&&i<arrayB.length;i++)
+      res[i]=itrLang_binaryNumberOp(arrayA[i],arrayB[i],f);
+    for(let i=arrayB.length;i<arrayA.length;i++)
+      res[i]=itrLang_binaryNumberOp(arrayA[i],itrLang_ismatrix(b)?b:0n,f);
+    for(let i=arrayA.length;i<arrayB.length;i++)
+      res[i]=itrLang_binaryNumberOp(itrLang_ismatrix(a)?a:0n,arrayB[i],f);
     return res;
   }
-  throw `unsupported type for unary operation: ${a.constructor.name}`;
+  throw `incompatible types for binary arithmetic operation: ${a.constructor.name} and ${b.constructor.name}`;
 }
+//XXX unary-matrix op (invert,mexp,mlog,...)
+function itrLang_binaryMatrixOp(a,b,f,F){
+  if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
+    return f(a,b);
+  }
+  if(a instanceof Matrix&&b instanceof Matrix){
+    return F(a,b);
+  }
+  if(itrLang_ismatrix(a)&&itrLang_ismatrix(b)){
+    return pointwiseMatrixOp(a,b,(x,y)=>itrLang_binaryMatrixOp(x,y,f,F));
+  }
+  if(a instanceof Array||b instanceof Array){
+    let arrayA=itrLang_asArray(a),arrayB=itrLang_asArray(b),res=new Array(Math.max(arrayA.length,arrayB.length));
+    for(let i=0;i<arrayA.length&&i<arrayB.length;i++)
+      res[i]=itrLang_binaryMatrixOp(arrayA[i],arrayB[i],f,F);
+    for(let i=arrayB.length;i<arrayA.length;i++)
+      res[i]=itrLang_binaryMatrixOp(arrayA[i],itrLang_ismatrix(b)?b:0n,f,F);
+    for(let i=arrayA.length;i<arrayB.length;i++)
+      res[i]=itrLang_binaryMatrixOp(itrLang_ismatrix(a)?a:0n,arrayB[i],f,F);
+    return res;
+  }
+  throw `incompatible types for binary arithmetic operation: ${a.constructor.name} and ${b.constructor.name}`;
+}
+//XXX array op
+
 
 function itrLang_stepProgram(){
   command=readInstruction(ip++)&0xffn;
@@ -302,35 +312,56 @@ function itrLang_stepProgram(){
     case ord('+'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_add(a,b));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x+y));
       }break;
     case ord('-'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_subtract(a,b));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x-y));
       }break;
     case ord('>'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_compare(a,b,x=>BigInt(x>0)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)>0n)));
       }break;
     case ord('='):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_compare(a,b,x=>BigInt(x=0)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)==0n)));
       }break;
     case ord('<'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_compare(a,b,x=>BigInt(x<0)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)<0n)));
       }break;
     case ord('¬'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_not(a));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(x==0n)));
       }break;
     case ord('~'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_negate(a));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>-x));
+      }break;
+    case ord('º'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_unaryNumberOp(a,(x)=>{let l=[];for(let i=0n;i<x;i++)l.push(i);return l;}));
+      }break;
+    case ord('¹'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_unaryNumberOp(a,(x)=>{let l=[];for(let i=1n;i<=x;i++)l.push(i);return l;}));
+      }break;
+      // TODO · (point-wise multiplication) ÷ (integer-division) % (modulo)
+    // matrix operations
+    case ord('*'):{
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryMatrixOp(a,b,(x,y)=>x*y,(A,B)=>itrLang_mmult(A,B)));
+      }break;
+      // TODO / (matrix division)
+    case ord('^'):{//FIXME matrix^int/int^matrix should not be point-wise
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryMatrixOp(a,b,(x,y)=>x**y,(A,B)=>{throw "unimplemented";}));
       }break;
 
     default:
