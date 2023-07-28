@@ -12,7 +12,7 @@ class Matrix{
       return 0n;
     return this.rows[row][colum];
   }
-  toString(){
+  toString(){//TODO print values correctly
     let s="("
     this.rows.forEach(r=>{r.forEach(e=>{s+=e+" ";});s=(r.length>0?s.substring(0,s.length-1):s)+",";});
     return s.substring(0,s.length-1)+")";
@@ -79,7 +79,9 @@ function itrLang_printValue(val){
         isString=false;
     });
     if(isString){
-      val.forEach(c=>putchar(c));
+      putchar(ord('"'));
+      val.forEach(c=>{if(c==ord('"')||c==ord('\\'))putchar(ord('\\'));putchar(c);});
+      putchar(ord('"'));
       return;
     }
     let first=true;
@@ -91,18 +93,30 @@ function itrLang_printValue(val){
   }
   [...val.toString()].forEach((c)=>putchar(ord(c)));
 }
+
 function itrLang_isspace(c){
   return [ord(' '),ord('\r'),ord('\n'),ord('\t')].indexOf(c)>=0;
 }
-function itrLang_readWord(){
-  let c=getchar();
-  buff=[];
-  while(itrLang_isspace(c))c=getchar();//skip spaces
-  if(c==ord('"')){
-    c=getchar();
-    while(c>=0&&c!=ord('"')){//read until next "
-      if(c==ord('\\')){//escape sequences
-        switch(c=getchar()){
+function itrLang_isdigit(c){
+  return c>=ord('0')&&c<=ord('9');
+}
+
+function itrLang_findMatchingBracket(str,i,left,right){
+  let k=1;
+  while(i++<str.length&&k>0){
+    if(str[i]==left)
+      k++;
+    if(str[i]==right)
+      k--;
+  }
+  return i;
+}
+function itrLang_parseInputStr(str){
+  let buff=[];
+  if(str[0]==ord('"')){
+    for(let i=1;i<str.length;i++){//read until next "
+      if(str[i]==ord('\\')){//escape sequences
+        switch(str[++i]){
           case ord('t'):
             buff.push(ord('\t'));
             break;
@@ -113,34 +127,155 @@ function itrLang_readWord(){
             buff.push(ord('\r'));
             break;
           default:
-            buff.push(c);
+            buff.push(str[i]);
         }
-        c=getchar();
         continue;
+      }
+      buff.push(str[i]);
+    }
+    return buff;
+  }
+  if(str[0]==ord('[')||str[0]==ord('{')){
+    let i=0;
+    while(i++<str.length){
+      while(itrLang_isspace(str[i]))i++;
+      let i0=i;
+      if(str[i]==ord('[')){
+        i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
+      }else if(str[i]==ord('{')){
+        i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
+      }else if(str[i]==ord('(')){
+        i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
+      }else if(str[i]==ord('"')){
+        while(i++<str.length){
+          if(str[i]==ord('"'))
+            break;
+          if(str[i]==ord('\\'))
+            i++;
+        }
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
+      }else{
+        while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
+        if(i0!=i||(str[i]!=ord(']')&&str[i]!=ord('}')))
+          buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }
+      if(str[i]==ord(']')||str[i]==ord('}'))
+        break;
+    }
+    return buff;
+  }
+  if(str[0]==ord('(')){
+    let rows=[];
+    let i=0;
+    while(i++<str.length){
+      while(itrLang_isspace(str[i]))i++;
+      let i0=i;
+      if(str[i]==ord('[')){
+        i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }else if(str[i]==ord('{')){
+        i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }else if(str[i]==ord('(')){
+        i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }else if(str[i]==ord('"')){
+        while(i++<str.length){
+          if(str[i]==ord('"'))
+            break;
+          if(str[i]==ord('\\'))
+            i++;
+        }
+        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }else{
+        while(i<str.length&&!itrLang_isspace(str[i])&&str[i]!=ord(',')&&str[i]!=ord(')'))i++;
+        if(i0!=i||(str[i]!=ord(')')))
+          buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+      }
+      if(str[i]==ord(')'))
+        break;
+      if(str[i]==ord(',')){
+        rows.push(buff);
+        buff=[];
+      }
+    }
+    if(rows.length>0){
+      if(buff.length>0)
+        rows.push(buff);
+      return new Matrix(rows);
+    }
+    return buff;
+  }
+  //TODO trim spaces
+  //XXX? support hex/binary numbers
+  let isNumber=true;
+  str.forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});//TODO only detect numbers if all digits are consecutive
+  if(isNumber){
+    let v=0n;
+    str.forEach(c=>{v*=10n;v+=c-ord('0');});
+    return v;
+  }
+  return str;
+}
+function itrLang_readBracket(left,right){
+  let buff=[left];
+  let k=1;
+  let c=getchar();
+  while(c>=0&&k>0){
+    if(c==left)
+      k++;
+    if(c==right)
+      k--;
+    buff.push(c);
+    if(k>0)
+      c=getchar();
+  }
+  valueStack.push(itrLang_parseInputStr(buff));
+  return;
+}
+function itrLang_readWord(){
+  let c=getchar();
+  let buff=[];
+  while(itrLang_isspace(c))c=getchar();//skip spaces
+  if(c==ord('"')){
+    buff.push(c);
+    c=getchar();
+    while(c>=0){
+      if(c==ord('"'))
+        break;
+      if(c==ord('\\')){
+        buff.push(c);
+        c=getchar();
       }
       buff.push(c);
       c=getchar();
     }
-    valueStack.push(buff);
+    valueStack.push(itrLang_parseInputStr(buff));
     return;
   }
   if(c==ord('[')){
-    // TODO read nested list
+    itrLang_readBracket(ord('['),ord(']'));
     return;
   }
   if(c==ord('{')){
-    // TODO read nested list
+    itrLang_readBracket(ord('{'),ord('}'));
     return;
   }
   if(c==ord('(')){
-    // TODO read tuple
+    itrLang_readBracket(ord('('),ord(')'));
     return;
   }
   while(c>=0&&!itrLang_isspace(c)){//read until next space
     buff.push(c);c=getchar();
   }
-  // TODO try to parse numbers (bin,dec,hex)
-  valueStack.push(buff);
+  valueStack.push(itrLang_parseInputStr(buff));
 }
 
 function itrLang_isnumber(e){
@@ -562,6 +697,10 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(x==0n)));
       }break;
+    case ord('¿'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(x!=0n)));
+      }break;
     case ord('~'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_unaryNumberOp(a,x=>-x));
@@ -639,7 +778,7 @@ function itrLang_stepProgram(){
         let M=v.reduce((m, e) => e > m ? e : m,0n);
         let res=new Array(Number(M)+1);
         res.fill(0n);
-        v.forEach(e=>res[e-offset]=1n);
+        v.forEach(e=>res[e]=1n);
         return res;
       }
       if(!mapBy){
@@ -666,12 +805,5 @@ function itrLang_stepProgram(){
     default:
       running=false;
   }
-  mapBy=false;
-  // literals
-  //TODO implement itrLang
-  // itr -> "Intger,Tuple,Rational" / ITeRator
-  /* stack types: unbounded integer, tuple, rational, real,  gaussian rational, complex
-  init stack: ( (source-code) (std-in) (main-stack) )
-                                        ^
-  */
+  mapBy=false;//operation not compatible with map
 }
