@@ -205,7 +205,7 @@ function itrLang(){
   interpreter=INTERPRETER_ITRLANG;
   language=LANG_CODE_UNICODE;//for loading unicode chars
   bits=0n;
-  EOF=0n;
+  EOF=-1n;
 }
 langForWhile();
 
