@@ -95,6 +95,9 @@ function stdoutWrite(chr){
   stdOutBytes.push(chr%256);
   output.value=utf8Decode.decode(new Uint8Array(stdOutBytes));
 }
+function outputEmpty(){
+  return stdOutBytes.length==0;
+}
 
 function reset(){
   initProgram();

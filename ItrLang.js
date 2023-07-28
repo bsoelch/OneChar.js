@@ -67,25 +67,29 @@ function itrLang_peekValue(val){
     return 0n;
   return valueStack.at(-1);
 }
-function itrLang_printValue(val){
-  if(val instanceof Array){//XXX string mode
-    let isString=true;
-    val.forEach(x=>{
-      if(!itrLang_isnumber(x))
-        isString=false;
-      if(typeof x==="number"&&x!=Math.floor(x))
-        isString=false;
-      if(x<0||x>255)
-        isString=false;
-    });
-    if(isString){
-      putchar(ord('"'));
-      val.forEach(c=>{if(c==ord('"')||c==ord('\\'))putchar(ord('\\'));putchar(c);});
-      putchar(ord('"'));
-      return;
+function itrLang_printValue(val,detectStrings=false,escapeStrings=false){
+  if(val instanceof Array){
+    if(detectStrings){
+      let isString=val.length>0;
+      val.forEach(x=>{
+        if(!itrLang_isnumber(x))
+          isString=false;
+        if(typeof x==="number"&&x!=Math.floor(x))
+          isString=false;
+        if(x<0||x>255)
+          isString=false;
+      });
+      if(isString){
+        if(escapeStrings)
+          putchar(ord('"'));
+        val.forEach(c=>{if(escapeStrings&&(c==ord('"')||c==ord('\\')))putchar(ord('\\'));putchar(c);});
+        if(escapeStrings)
+          putchar(ord('"'));
+        return;
+      }
     }
     let first=true;
-    val.forEach((e)=>{putchar(ord(first?'(':' '));itrLang_printValue(e);first=false;});
+    val.forEach((e)=>{putchar(ord(first?'(':' '));itrLang_printValue(e,detectStrings,true);first=false;});
     if(first)
       putchar(ord('('));
     putchar(ord(')'));
@@ -483,15 +487,24 @@ function itrLang_pow(a,b){
   }
   throw `incompatible types for exponentiation: ${a.constructor.name} and ${b.constructor.name}`;
 }
-//XXX array ops
+
+function itrLang_finishedSubroutine(){
+  if(!callStackEmpty() && callStackPeek() instanceof Array){
+    sourceCode=callStackPop;
+    ip=callStackPop();
+    return;
+  }
+  running=false;
+  if(outputEmpty()){//output top stack element
+    itrLang_printValue(itrLang_peekValue(),true);
+  }
+}
 
 let mapBy=false;
 function itrLang_stepProgram(){
   command=readInstruction(ip++);
   if(command==ord('\0')){
-    running=false;
-    //output top stack element
-    itrLang_printValue(itrLang_peekValue());
+    itrLang_finishedSubroutine();
     return;//reached end of program
   }
   if(comment){
@@ -580,7 +593,9 @@ function itrLang_stepProgram(){
         comment=true;
         return;
       }
-      //TODO return from subroutine
+      //XXX exit nested blocks
+      //return from subroutine
+      ip=callStackPop();
       break;
     case ord('(')://start tuple
       stackStack.push(valueStack);
@@ -608,6 +623,20 @@ function itrLang_stepProgram(){
       valueStack=prevStack;
       }break;
     // control flow
+    case ord('¢'):
+      callStackPush(ip);
+      ip=itrLang_popValue();
+      if(!itrLang_isnumber(ip)){//XXX? allow jumping to multiple positions at once (parallel execution)
+        console.error(`unexpected call position ${ip}`);
+        running=false;
+      }
+      break;
+    case ord('©'):
+      callStackPush(ip);
+      callStackPush(sourceCode);
+      sourceCode=itrLang_toArray(itrLang_popValue());
+      ip=0;
+      break;
     case ord('?'):
       // TODO start if-block
       break;
@@ -630,6 +659,13 @@ function itrLang_stepProgram(){
     // XXX? read line/read word/read input
     case ord('#'):{// parse word
         itrLang_readWord();
+      }break;
+    case ord('¥'):{// write byte
+        let s=itrLang_popValue();
+        itrLang_unaryNumberOp(s,c=>putchar(BigInt(c)));
+      }break;
+    case ord('£'):{// write string
+        itrLang_printValue(itrLang_popValue());
       }break;
     //XXX write char, write string,write value
     // arithmetic operations
@@ -732,13 +768,13 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_multiply(a,b));
       }break;
-      // TODO / (matrix division)
+      // TODO matrix division
     case ord('^'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_pow(a,b));
       }break;
-    // vector operations TODO handle map by
+    // vector operations
     case ord('µ'):{//map TODO handle nested µµ -> use map on all sub-lists
         mapBy=true;
         return;//unfinished operation
@@ -803,7 +839,7 @@ function itrLang_stepProgram(){
         itrLang_pushValue(v);
       }break;
     default:
-      running=false;
+      break;
   }
   mapBy=false;//operation not compatible with map
 }
