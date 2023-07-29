@@ -115,7 +115,7 @@ function itrLang_findMatchingBracket(str,i,left,right){
   }
   return i;
 }
-function itrLang_parseInputStr(str){
+function itrLang_parseString(str){
   let buff=[];
   if(str[0]==ord('"')){
     for(let i=1;i<str.length;i++){//read until next "
@@ -135,6 +135,8 @@ function itrLang_parseInputStr(str){
         }
         continue;
       }
+      if(str[i]==ord('"'))//unescaped " -> end of string
+        break;
       buff.push(str[i]);
     }
     return buff;
@@ -146,15 +148,15 @@ function itrLang_parseInputStr(str){
       let i0=i;
       if(str[i]==ord('[')){
         i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('{')){
         i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('(')){
         i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('"')){
         while(i++<str.length){
@@ -163,12 +165,12 @@ function itrLang_parseInputStr(str){
           if(str[i]==ord('\\'))
             i++;
         }
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else{
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
         if(i0!=i||(str[i]!=ord(']')&&str[i]!=ord('}')))
-          buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+          buff.push(itrLang_parseString(str.slice(i0,i)));
       }
       if(str[i]==ord(']')||str[i]==ord('}'))
         break;
@@ -183,13 +185,13 @@ function itrLang_parseInputStr(str){
       let i0=i;
       if(str[i]==ord('[')){
         i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
       }else if(str[i]==ord('{')){
         i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
       }else if(str[i]==ord('(')){
         i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
       }else if(str[i]==ord('"')){
         while(i++<str.length){
           if(str[i]==ord('"'))
@@ -197,11 +199,11 @@ function itrLang_parseInputStr(str){
           if(str[i]==ord('\\'))
             i++;
         }
-        buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+        buff.push(itrLang_parseString(str.slice(i0,i)));
       }else{
         while(i<str.length&&!itrLang_isspace(str[i])&&str[i]!=ord(',')&&str[i]!=ord(')'))i++;
         if(i0!=i||(str[i]!=ord(')')))
-          buff.push(itrLang_parseInputStr(str.slice(i0,i)));
+          buff.push(itrLang_parseString(str.slice(i0,i)));
       }
       if(str[i]==ord(')'))
         break;
@@ -241,7 +243,7 @@ function itrLang_readBracket(left,right){
     if(k>0)
       c=getchar();
   }
-  valueStack.push(itrLang_parseInputStr(buff));
+  valueStack.push(itrLang_parseString(buff));
   return;
 }
 function itrLang_readWord(){
@@ -261,7 +263,8 @@ function itrLang_readWord(){
       buff.push(c);
       c=getchar();
     }
-    valueStack.push(itrLang_parseInputStr(buff));
+    buff.push(c);
+    valueStack.push(itrLang_parseString(buff));
     return;
   }
   if(c==ord('[')){
@@ -279,7 +282,7 @@ function itrLang_readWord(){
   while(c>=0&&!itrLang_isspace(c)){//read until next space
     buff.push(c);c=getchar();
   }
-  valueStack.push(itrLang_parseInputStr(buff));
+  valueStack.push(itrLang_parseString(buff));
 }
 
 function itrLang_isnumber(e){
@@ -512,32 +515,6 @@ function itrLang_stepProgram(){
       comment=false;
     return;
   }
-  if(stringMode){
-    if(command!=ord('\\')){
-      if(skipCount==0)
-        itrLang_pushValue(command);
-      return
-    }
-    command=readInstruction(ip);
-    if(command==ord('\\')){// \\ -> escaped backslash
-      ip++;
-      if(skipCount==0)
-        itrLang_pushValue(command);
-      return;
-    }
-    if(skipCount==0){
-      let prevStack=itrLang_popStack();
-      prevStack.push(valueStack);
-      valueStack=prevStack;
-    }
-    if(mapBy){
-      //TODO map vector by function
-      throw "unimplemented";
-      mapBy=false;
-    }
-    stringMode=false;
-    return;
-  }
   if(skipCount>0){
     //TODO skip block
     return;
@@ -583,20 +560,26 @@ function itrLang_stepProgram(){
       break;
     //strings&comments
     case ord('"'):
-      stackStack.push(valueStack);
-      valueStack=[];
-      stringMode=true;
-      break;
-    case ord('\\'):
-      if(readInstruction(ip)==ord('\\')){// \\ -> comment
-        ip++;
-        comment=true;
-        return;
+      let i0=Number(ip)-1;//position of "
+      while(ip++<sourceCode.length){
+        if(readInstruction(ip)==ord('"')){
+          ip++;
+          break;
+        }
+        if(readInstruction(ip)==ord('\\'))
+          ip++;
       }
-      //XXX exit nested blocks
-      //return from subroutine
-      ip=callStackPop();
+      itrLang_pushValue(itrLang_parseString(sourceCode.slice(i0,Number(ip))));
+      if(mapBy){//TODO apply function to every element of list
+        throw new Error("unimplemented");
+      }
       break;
+    case ord('\t'):
+      while(ip++<sourceCode.length){
+        if(str[ip]==ord('\n'))
+          break;
+      }
+      return;
     case ord('(')://start tuple
       stackStack.push(valueStack);
       valueStack=[];
@@ -623,14 +606,6 @@ function itrLang_stepProgram(){
       valueStack=prevStack;
       }break;
     // control flow
-    case ord('¢'):
-      callStackPush(ip);
-      ip=itrLang_popValue();
-      if(!itrLang_isnumber(ip)){//XXX? allow jumping to multiple positions at once (parallel execution)
-        console.error(`unexpected call position ${ip}`);
-        running=false;
-      }
-      break;
     case ord('©'):
       callStackPush(ip);
       callStackPush(sourceCode);
@@ -656,18 +631,27 @@ function itrLang_stepProgram(){
     case ord('_'):{// read char
         itrLang_pushValue(getchar());
       }break;
-    // XXX? read line/read word/read input
     case ord('#'):{// parse word
         itrLang_readWord();
       }break;
-    case ord('¥'):{// write byte
+    // XXX read single line, read word
+    case ord('§'):{// read line XXX? read lines (until first empty line)
+        let c=getchar();
+        let buff=[];
+        while(c>=0&&c!=ord('\n')){
+          buff.push(c);
+          c=getchar();
+        }
+        itrLang_pushValue(buff);
+      }break;
+    case ord('¥'):{// write char(s)
         let s=itrLang_popValue();
         itrLang_unaryNumberOp(s,c=>putchar(BigInt(c)));
       }break;
-    case ord('£'):{// write string
+    case ord('£'):{// write value
         itrLang_printValue(itrLang_popValue());
       }break;
-    //XXX write char, write string,write value
+    // TODO value from/to string
     // arithmetic operations
     case ord('+'):{
         let b=itrLang_popValue();
@@ -684,11 +668,7 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x*y));
       }break;
-    case ord('/'):{// fractional division (point-wise)
-        let b=itrLang_popValue();
-        let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_realDivide(a,b));
-      }break;
+      // XXX point-wise fractional division
     case ord('÷'):{//integer division
         let b=itrLang_popValue();
         let a=itrLang_popValue();
@@ -768,7 +748,7 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_multiply(a,b));
       }break;
-      // TODO matrix division
+      // TODO matrix division  A/B -> AB⁻¹  A\B -> A⁻¹B
     case ord('^'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
