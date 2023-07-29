@@ -30,10 +30,11 @@ function itrLang_exp(a){
   if(!itrLang_ismatrix(a))
     throw `unsupported type for exponential function: ${a.constructor.name}`;
   let res=1.0,q=a,p=q;
+  let s=Math.max(a.nrows,a.ncolums);
   if(a instanceof Matrix){//XXX function for creating identity matrix
-    res=new Array(a.nrows);
-    for(let i=0;i<a.nrows;i++){
-      res[i]=new Array(a.ncolums);
+    res=new Array(s);
+    for(let i=0;i<s;i++){
+      res[i]=new Array(s);
       res[i].fill(0.0);
       res[i][i]=1.0;
     }
@@ -616,17 +617,30 @@ function itrLang_stepProgram(){
       // TODO start if-block
       break;
     // stack operations
-    case ord(':'):{//dup
+    case ord('ä'):{//dup
         let a=itrLang_peekValue();
         itrLang_pushValue(a);
       }break;
-    case ord(';'):{//over
+    case ord('â'):{//over
         let a=itrLang_popValue();
         let b=itrLang_peekValue();
         itrLang_pushValue(a);
         itrLang_pushValue(b);
       }break;
-      //TODO swap,drop
+    case ord('á'):{//swap
+        let a=itrLang_popValue();
+        let b=itrLang_popValue();
+        itrLang_pushValue(a);
+        itrLang_pushValue(b);
+      }break;
+    case ord('à'):{//drop under
+        let a=itrLang_popValue();
+        itrLang_popValue();
+        itrLang_pushValue(a);
+      }break;
+    case ord('å'):{//drop
+        let a=itrLang_popValue();
+      }break;
     // IO
     case ord('_'):{// read char
         itrLang_pushValue(getchar());
