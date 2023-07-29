@@ -35,20 +35,20 @@ function itrLang_exp(a){
     res=new Array(s);
     for(let i=0;i<s;i++){
       res[i]=new Array(s);
-      res[i].fill(0.0);
-      res[i][i]=1.0;
+      res[i].fill(0n);
+      res[i][i]=1n;
     }
     res=new Matrix(res);
   }
   for(let k=2;k<100;k++){//XXX? exit condition depending on norm of matrix
     res=itrLang_add(res,p);
     p=itrLang_multiply(p,q);
-    p=itrLang_realDivide(p,k,(x,y)=>x/y);
+    p=itrLang_realDivide(p,k);
   }
   return res;
 }
 
-//TODO minv,mldiv,mrdiv,mexp,mlog,mpow
+//TODO minv,mldiv,mrdiv,mlog,mpow
 
 function itrLang_popStack(){
   if(stackStack.length>0)
@@ -411,6 +411,8 @@ function itrLang_add(a,b){
 }
 function itrLang_realDivide(a,b){
   numberDivide=(x,y)=>{
+    if(a==0||b==0)// set 0/0 to 0
+      return 0n;
     if(typeof x === "bigint" && typeof y === "bigint" )
       return Number(x)/Number(y);//TODO return Fraction
     if((typeof x === "number"||typeof x === "bigint") && (typeof y === "number"||typeof y === "bigint"))
@@ -422,6 +424,8 @@ function itrLang_realDivide(a,b){
 //XXX unary-matrix op (invert,mexp,mlog,...)
 function itrLang_multiply(a,b){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
+    if(a==0||b==0)
+      return 0n;
     if(typeof a === "bigint" && typeof b === "bigint" )
       return a*b;
     if((typeof a === "number"||typeof a === "bigint") && (typeof b === "number"||typeof b === "bigint"))
@@ -525,10 +529,8 @@ function itrLang_stepProgram(){
   }
   if(command==ord('\'')){
     command=readInstruction(ip++);
-    if(mapBy){//replace all elements of vector with char
-      let v=itrLang_toArray(itrLang_popValue());
-      v=v.map(x=>command);//TODO execute command on elements instead of setting value (consistency with string version)
-      itrLang_pushValue(v);
+    if(mapBy){//TODO apply function to every element of list
+      throw new Error("unimplemented");
       mapBy=false;
     }else{
       itrLang_pushValue([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));//push char as string (converted to UTF-8)
@@ -576,11 +578,12 @@ function itrLang_stepProgram(){
       itrLang_pushValue(itrLang_parseString(str));
       if(mapBy){//TODO apply function to every element of list
         throw new Error("unimplemented");
+        mapBy=false;
       }
       break;
-    case ord('\t'):
+    case ord(';'):
       while(ip++<sourceCode.length){
-        if(str[ip]==ord('\n'))
+        if(readInstruction(ip)==ord('\n'))
           break;
       }
       return;
@@ -679,7 +682,10 @@ function itrLang_stepProgram(){
     case ord('£'):{// write value
         itrLang_printValue(itrLang_popValue());
       }break;
-    // TODO value from/to string
+    case ord('$'):{// value to string
+        itrLang_pushValue(itrLang_popValue().toString());//XXX better to string method
+      }break;
+    // TODO value from string
     // arithmetic operations
     case ord('+'):{
         let b=itrLang_popValue();
@@ -699,7 +705,7 @@ function itrLang_stepProgram(){
     case ord('÷'):{// point-wise (fractional) division
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>Number(x)/Number(y)));
+        itrLang_pushValue(itrLang_realDivide(a,b));
       }break;
     case ord(':'):{//integer division
         let b=itrLang_popValue();
@@ -787,7 +793,12 @@ function itrLang_stepProgram(){
         itrLang_pushValue(itrLang_pow(a,b));
       }break;
     // vector operations
-    case ord('µ'):{//map TODO handle nested µµ -> use map on all sub-lists
+    case ord('°'):{
+        let b=itrLang_asArray(itrLang_popValue());
+        let a=itrLang_asArray(itrLang_popValue());
+        itrLang_pushValue(a.concat(b));
+      }break;
+    case ord('µ'):{//map TODO handle nested µ  µµ -> use map on all sub-lists
         mapBy=true;
         return;//unfinished operation
       }
