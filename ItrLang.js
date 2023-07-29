@@ -304,7 +304,10 @@ function itrLang_toArray(x){
   if(x instanceof Array)
     return x;
   if(itrLang_isnumber(x)){
-    let l=[];for(let i=1n;i<=x;i++)l.push(i);return l;
+    let l=[];
+    for(let i=1n;i<=x;i++)
+      l.push(i);
+    return l;
   }
   if(x instanceof Matrix){
     return x.rows;
@@ -494,7 +497,7 @@ function itrLang_pow(a,b){
 
 function itrLang_finishedSubroutine(){
   if(!callStackEmpty() && callStackPeek() instanceof Array){
-    sourceCode=callStackPop;
+    sourceCode=callStackPop();
     ip=callStackPop();
     return;
   }
@@ -507,7 +510,7 @@ function itrLang_finishedSubroutine(){
 let mapBy=false;
 function itrLang_stepProgram(){
   command=readInstruction(ip++);
-  if(command==ord('\0')){
+  if(ip>sourceCode.length||command==ord('\0')){
     itrLang_finishedSubroutine();
     return;//reached end of program
   }
@@ -522,17 +525,13 @@ function itrLang_stepProgram(){
   }
   if(command==ord('\'')){
     command=readInstruction(ip++);
-    if(command&0xC0n){
-      //TODO read sequence of characters corresponding to utf-8 char
-    }
     if(mapBy){//replace all elements of vector with char
-      let v=itrLang_popValue();
-      console.log(v);
-      v=v.map(x=>command);
+      let v=itrLang_toArray(itrLang_popValue());
+      v=v.map(x=>command);//TODO execute command on elements instead of setting value (consistency with string version)
       itrLang_pushValue(v);
       mapBy=false;
     }else{
-      itrLang_pushValue([command]);//push char as string
+      itrLang_pushValue([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));//push char as string (converted to UTF-8)
     }
     return;
   }
@@ -544,14 +543,15 @@ function itrLang_stepProgram(){
       itrLang_pushValue(command-ord('0'));
       numberMode=true;
     }
+    command=readInstruction(ip);
+    if(mapBy&&(command<ord('0')||command>ord('9'))){// µ followed by number
+      let n=itrLang_popValue();
+      let v=itrLang_toArray(itrLang_popValue());
+      v=v.map(x=>n);
+      itrLang_pushValue(v);
+      mapBy=false;
+    }
     return;
-  }
-  if(numberMode&&mapBy){// µ followed by number
-    let n=itrLang_popValue();
-    let v=itrLang_popValue();
-    v=v.map(x=>n);
-    itrLang_pushValue(v);
-    mapBy=false;
   }
   numberMode=false;
   switch(command){
@@ -561,16 +561,19 @@ function itrLang_stepProgram(){
       break;
     //strings&comments
     case ord('"'):
-      let i0=Number(ip)-1;//position of "
-      while(ip++<sourceCode.length){
-        if(readInstruction(ip)==ord('"')){
-          ip++;
+      let str=[Number(ord('"'))];//position of "
+      while(ip<sourceCode.length){
+        command=readInstruction(ip++);
+        str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+        if(command==ord('"')){
           break;
         }
-        if(readInstruction(ip)==ord('\\'))
-          ip++;
+        if(command==ord('\\')){
+          command=readInstruction(ip++);
+          str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+        }
       }
-      itrLang_pushValue(itrLang_parseString(sourceCode.slice(i0,Number(ip))));
+      itrLang_pushValue(itrLang_parseString(str));
       if(mapBy){//TODO apply function to every element of list
         throw new Error("unimplemented");
       }
@@ -611,6 +614,8 @@ function itrLang_stepProgram(){
       callStackPush(ip);
       callStackPush(sourceCode);
       sourceCode=itrLang_toArray(itrLang_popValue());
+      sourceCode=[...utf8Decode.decode(new Uint8Array(sourceCode.map(c=>Number(c))))].map(c=>ord(c));//get string code-points
+      console.log(sourceCode);
       ip=0;
       break;
     case ord('?'):
@@ -621,21 +626,23 @@ function itrLang_stepProgram(){
         let a=itrLang_peekValue();
         itrLang_pushValue(a);
       }break;
-    case ord('â'):{//over
+    case ord('á'):{//over
         let a=itrLang_popValue();
         let b=itrLang_peekValue();
         itrLang_pushValue(a);
         itrLang_pushValue(b);
       }break;
-    case ord('á'):{//swap
+    case ord('à'):{//swap
         let a=itrLang_popValue();
         let b=itrLang_popValue();
         itrLang_pushValue(a);
         itrLang_pushValue(b);
       }break;
-    case ord('à'):{//drop under
+    case ord('â'):{//"under" (shorthand for swap, over) push top element below second element
         let a=itrLang_popValue();
-        itrLang_popValue();
+        let b=itrLang_popValue();
+        itrLang_pushValue(a);
+        itrLang_pushValue(b);
         itrLang_pushValue(a);
       }break;
     case ord('å'):{//drop
@@ -649,10 +656,17 @@ function itrLang_stepProgram(){
         itrLang_readWord();
       }break;
     // XXX read single line, read word
-    case ord('§'):{// read line XXX? read lines (until first empty line)
+    case ord('§'):{// read "paragraph" (read all characters until first empty line)
         let c=getchar();
         let buff=[];
-        while(c>=0&&c!=ord('\n')){
+        while(c>=0){
+          if(c==ord('\n')){
+            c=getchar();
+            if(c==ord('\n'))//double-new line
+              break;
+            buff.push(ord('\n'));
+            continue;
+          }
           buff.push(c);
           c=getchar();
         }
@@ -682,8 +696,12 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x*y));
       }break;
-      // XXX point-wise fractional division
-    case ord('÷'):{//integer division
+    case ord('÷'):{// point-wise (fractional) division
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>Number(x)/Number(y)));
+      }break;
+    case ord(':'):{//integer division
         let b=itrLang_popValue();
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x/y));
