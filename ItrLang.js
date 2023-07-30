@@ -499,7 +499,46 @@ function itrLang_pow(a,b){
   throw `incompatible types for exponentiation: ${a.constructor.name} and ${b.constructor.name}`;
 }
 
+let mapBy=false;
+class ForEachLoop{
+  constructor(vector){
+    this.vector=vector;
+    this.index=1;
+  }
+}
+function itrLang_map(code){
+  let vector=itrLang_toArray(itrLang_popValue());
+  if(vector.length==0){
+    itrLang_pushValue(vector);
+    return;
+  }
+  stackStack.push(valueStack);
+  valueStack=[vector[0]];
+  callStackPush(ip);
+  callStackPush(sourceCode);
+  callStackPush(new ForEachLoop(vector));
+  sourceCode=code;
+  ip=0;
+}
+
 function itrLang_finishedSubroutine(){
+  numberMode=false;
+  mapBy=false;
+  if(!callStackEmpty() && callStackPeek() instanceof ForEachLoop){
+    let loop=callStackPeek();
+    if(loop.index<loop.vector.length){
+      valueStack.push(loop.vector[loop.index++]);
+      ip=0;
+      return;
+    }
+    callStackPop();
+    sourceCode=callStackPop();
+    ip=callStackPop();
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
+    return;
+  }
   if(!callStackEmpty() && callStackPeek() instanceof Array){
     sourceCode=callStackPop();
     ip=callStackPop();
@@ -510,9 +549,9 @@ function itrLang_finishedSubroutine(){
     itrLang_printValue(itrLang_peekValue(),true);
   }
 }
+//TODO add function for counting bytes in itr-lang program using the specified encoding
 
-let mapBy=false;
-function itrLang_stepProgram(){
+function itrLang_stepProgram(){//TODO add support for code-strings »«
   command=readInstruction(ip++);
   if(ip>sourceCode.length||command==ord('\0')){
     itrLang_finishedSubroutine();
@@ -529,11 +568,14 @@ function itrLang_stepProgram(){
   }
   if(command==ord('\'')){
     command=readInstruction(ip++);
-    if(mapBy){//TODO apply function to every element of list
-      throw new Error("unimplemented");
+    let char=[...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c));
+    if(mapBy){
+      let v=itrLang_toArray(itrLang_popValue());
+      v=v.map(x=>char);
+      itrLang_pushValue(v);
       mapBy=false;
     }else{
-      itrLang_pushValue([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));//push char as string (converted to UTF-8)
+      itrLang_pushValue(char);//push char as string (converted to UTF-8)
     }
     return;
   }
@@ -556,31 +598,34 @@ function itrLang_stepProgram(){
     return;
   }
   numberMode=false;
+  if(command==ord('"')){
+    let str=[Number(ord('"'))];//position of "
+    while(ip<sourceCode.length){
+      command=readInstruction(ip++);
+      str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+      if(command==ord('"')){
+        break;
+      }
+      if(command==ord('\\')){
+        command=readInstruction(ip++);
+        str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+      }
+    }
+    if(mapBy){
+      itrLang_map([...utf8Decode.decode(new Uint8Array(str.slice(1,str.length-1).map(c=>Number(c))))].map(c=>ord(c)));
+      mapBy=false;
+      return;
+    }
+    itrLang_pushValue(itrLang_parseString(str));
+    return;
+  }
   switch(command){
     case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
     case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
+    case ord('"'):case ord('\'')://string and char-literals have already been handled
     case ord(' '):case ord('\t'):case ord('\n'):case ord('\r')://ignore spaces
       break;
-    //strings&comments
-    case ord('"'):
-      let str=[Number(ord('"'))];//position of "
-      while(ip<sourceCode.length){
-        command=readInstruction(ip++);
-        str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
-        if(command==ord('"')){
-          break;
-        }
-        if(command==ord('\\')){
-          command=readInstruction(ip++);
-          str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
-        }
-      }
-      itrLang_pushValue(itrLang_parseString(str));
-      if(mapBy){//TODO apply function to every element of list
-        throw new Error("unimplemented");
-        mapBy=false;
-      }
-      break;
+    //comments
     case ord(';'):
       while(ip++<sourceCode.length){
         if(readInstruction(ip)==ord('\n'))
@@ -618,7 +663,6 @@ function itrLang_stepProgram(){
       callStackPush(sourceCode);
       sourceCode=itrLang_toArray(itrLang_popValue());
       sourceCode=[...utf8Decode.decode(new Uint8Array(sourceCode.map(c=>Number(c))))].map(c=>ord(c));//get string code-points
-      console.log(sourceCode);
       ip=0;
       break;
     case ord('?'):
@@ -683,7 +727,7 @@ function itrLang_stepProgram(){
         itrLang_printValue(itrLang_popValue());
       }break;
     case ord('$'):{// value to string
-        itrLang_pushValue(itrLang_popValue().toString());//XXX better to string method
+        itrLang_pushValue([...utf8Encode.encode(itrLang_popValue().toString())].map(c=>BigInt(c)));//XXX better to string method for arrays ? wrapper class
       }break;
     // TODO value from string
     // arithmetic operations
@@ -800,6 +844,7 @@ function itrLang_stepProgram(){
       }break;
     case ord('µ'):{//map TODO handle nested µ  µµ -> use map on all sub-lists
         mapBy=true;
+        //XXX? read complete map operation µ*. , µ*"..." , µ*'.  , µ*(...) , µ*?...] , ...
         return;//unfinished operation
       }
     case ord('S'):{// sum
