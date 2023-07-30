@@ -1,4 +1,44 @@
+function gcd(a,b){
+  if(a<0n)
+    a=-a;
+  if(b<0n)
+    b=-b;
+  if(a<b){
+    [a,b]=[b,a];
+  }
+  while(b!=0n){
+    a%=b;
+    [a,b]=[b,a];
+  }
+  return a;
+}
 
+class Fraction{
+  constructor(numerator,denominator=1n){
+    if(numerator instanceof Fraction){
+      this.numerator=numerator.numerator;
+      this.denominator=numerator.denominator;
+      return;
+    }
+    let g=gcd(numerator,denominator);
+    if(g!=0n){
+      numerator/=g;
+      denominator/=g;
+    }
+    if(denominator<0n){
+      denominator=-denominator;
+    }
+    if(denominator==0n){
+      numerator=0n;
+      numerator=1n;
+    }
+    this.numerator=numerator;
+    this.denominator=denominator;
+  }
+  toString(){
+    return `${this.numerator}/${this.denominator}`;
+  }
+}
 class Matrix{
   constructor(rows){
     this.rows=rows;
@@ -19,7 +59,7 @@ class Matrix{
   }
 }
 //XXX? custom float type
-//TODO fraction type, complex type
+//TODO complex type
 
 function itrLang_exp(a){
   if(a instanceof Array){
@@ -73,9 +113,7 @@ function itrLang_printValue(val,detectStrings=false,escapeStrings=false){
     if(detectStrings){
       let isString=val.length>0;
       val.forEach(x=>{
-        if(!itrLang_isnumber(x))
-          isString=false;
-        if(typeof x==="number"&&x!=Math.floor(x))
+        if(!itrLang_isint(x))
           isString=false;
         if(x<0||x>255)
           isString=false;
@@ -286,8 +324,17 @@ function itrLang_readWord(){
   valueStack.push(itrLang_parseString(buff));
 }
 
+function itrLang_isint(x){
+  return typeof x === "bigint";
+}
+function itrLang_isrational(x){
+  return typeof x === "bigint" || x instanceof Fraction;
+}
+function itrLang_isreal(x){
+  return typeof x === "bigint"  || x instanceof Fraction || typeof x === "number";
+}
 function itrLang_isnumber(e){
-  return typeof e === "bigint" || typeof e === "number"; //XXX fraction,complex,real
+  return typeof e === "bigint"  || e instanceof Fraction || typeof e === "number";//XXX complex
 }
 function itrLang_ismatrix(e){
   if(itrLang_isnumber(e))
@@ -329,6 +376,24 @@ function itrLang_asBool(a){
     return isTrue;
   }
   throw `unsupported type for unary operation: ${a.constructor.name}`;
+}
+function itrLang_asInt(a){
+  if(typeof a === "bigint")
+    return a;
+  if(typeof a === "number")
+    return BigInt(Math.round(a));
+  if(a instanceof Fraction)//TODO always round to nearest integer
+    return a.numerator/a.denominator;
+  throw `cannot convert ${a.constructor.name} to int`;
+}
+function itrLang_asReal(a){
+  if(typeof a === "number")
+    return a;
+  if(typeof a === "bigint")
+    return Number(a);
+  if(a instanceof Fraction)
+    return Number(a.numerator)/Number(a.denominator);//XXX? more precise conversion for large numbers
+  throw `cannot convert ${a.constructor.name} to real`;
 }
 
 function pointwiseMatrixOp(a,b,f){
@@ -380,6 +445,20 @@ function itrLang_unaryNumberOp(a,f){
   }
   throw `unsupported type for unary operation: ${a.constructor.name}`;
 }
+function itrLang_negate(x){
+  numberNegate=(x)=>{
+    if(itrLang_isint(x))
+      return -x;
+    if(itrLang_isrational(x)){
+      x=new Fraction(x);
+      return new Fraction(-x.numerator,x.denominator);
+    }
+    if(itrLang_isreal(x))
+      return -itrLang_asReal(x);
+  throw `unsupported number type for negation: ${x.constructor.name}`;
+  }
+  return itrLang_unaryNumberOp(x,numberNegate);
+}
 function itrLang_binaryNumberOp(a,b,f){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
     return f(a,b);
@@ -399,37 +478,106 @@ function itrLang_binaryNumberOp(a,b,f){
   }
   throw `incompatible types for binary arithmetic operation: ${a.constructor.name} and ${b.constructor.name}`;
 }
+function itrLang_compareNumbers(x,y){
+  if(itrLang_isint(x) && itrLang_isint(y))
+    return x-y;
+  if(itrLang_isrational(x) && itrLang_isrational(y)){
+    x=new Fraction(x);y=new Fraction(y);
+    return x.numerator*y.denominator-y.numerator*x.denominator;
+  }
+  if(itrLang_isreal(x)&& itrLang_isreal(y))
+    return itrLang_asReal(x)-itrLang_asReal(y);
+  throw `incompatible number types for number comparison: ${x.constructor.name} and ${y.constructor.name}`;
+}
 function itrLang_add(a,b){
   numberAdd=(x,y)=>{
-    if(typeof x === "bigint" && typeof y === "bigint" )
+    if(itrLang_isint(x) && itrLang_isint(y))
       return x+y;
-    if((typeof x === "number"||typeof x === "bigint") && (typeof y === "number"||typeof y === "bigint"))
-      return Number(x)+Number(y);
+    if(itrLang_isrational(x) && itrLang_isrational(y)){
+      x=new Fraction(x);y=new Fraction(y);
+      return new Fraction(x.numerator*y.denominator+y.numerator*x.denominator,x.denominator*y.denominator);
+    }
+    if(itrLang_isreal(x)&& itrLang_isreal(y))
+      return itrLang_asReal(x)+itrLang_asReal(y);
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberAdd);
+}
+function itrLang_subtract(a,b){
+  numberSubtract=(x,y)=>{
+    if(itrLang_isint(x) && itrLang_isint(y))
+      return x-y;
+    if(itrLang_isrational(x) && itrLang_isrational(y)){
+      x=new Fraction(x);y=new Fraction(y);
+      return new Fraction(x.numerator*y.denominator-y.numerator*x.denominator,x.denominator*y.denominator);
+    }
+    if(itrLang_isreal(x)&& itrLang_isreal(y))
+      return itrLang_asReal(x)-itrLang_asReal(y);
+    throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
+  }
+  return itrLang_binaryNumberOp(a,b,numberSubtract);
 }
 function itrLang_realDivide(a,b){
   numberDivide=(x,y)=>{
     if(a==0||b==0)// set 0/0 to 0
       return 0n;
-    if(typeof x === "bigint" && typeof y === "bigint" )
-      return Number(x)/Number(y);//TODO return Fraction
-    if((typeof x === "number"||typeof x === "bigint") && (typeof y === "number"||typeof y === "bigint"))
-      return Number(x)/Number(y);
+    if(itrLang_isint(x) && itrLang_isint(y))
+      return new Fraction(x,y);
+    if(itrLang_isrational(x) && itrLang_isrational(y)){
+      x=new Fraction(x);y=new Fraction(y);
+      return new Fraction(x.numerator*y.denominator,x.denominator*y.numerator);
+    }
+    if(itrLang_isreal(x)&& itrLang_isreal(y))
+      return itrLang_asReal(x)/itrLang_asReal(y);
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberDivide);
 }
-//XXX unary-matrix op (invert,mexp,mlog,...)
+function itrLang_intDivide(a,b){
+  numberDivide=(x,y)=>{
+    if(a==0||b==0)// set 0/0 to 0
+      return 0n;
+    if(itrLang_isint(x) && itrLang_isint(y))
+      return x/y;
+    if(itrLang_isrational(x) && itrLang_isrational(y)){
+      x=new Fraction(x);y=new Fraction(y);
+      return (x.numerator*y.denominator)/(x.denominator*y.numerator);
+    }
+    if(itrLang_isreal(x)&& itrLang_isreal(y))
+      return Math.floor(itrLang_asReal(x)/itrLang_asReal(y));
+    throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
+  }
+  return itrLang_binaryNumberOp(a,b,numberDivide);
+}
+function itrLang_remainder(a,b){
+  numberRemainder=(x,y)=>{
+    if(a==0||b==0)// set a%0 to a
+      return a;
+    if(itrLang_isint(x) && itrLang_isint(y))
+      return x%y;
+    if(itrLang_isrational(x) && itrLang_isrational(y)){
+      x=new Fraction(x);y=new Fraction(y);
+      let i=(x.numerator*y.denominator)/(x.denominator*y.numerator);
+      return new Fraction(x.numerator*y.denominator-i*(x.denominator*y.numerator),x.denominator*y.denominator);
+    }
+    if(itrLang_isreal(x)&& itrLang_isreal(y))
+      return (itrLang_asReal(x)/itrLang_asReal(y))%1;
+    throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
+  }
+  return itrLang_binaryNumberOp(a,b,numberRemainder);
+}
 function itrLang_multiply(a,b){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
     if(a==0||b==0)
       return 0n;
-    if(typeof a === "bigint" && typeof b === "bigint" )
+    if(itrLang_isint(a) && itrLang_isint(b))
       return a*b;
-    if((typeof a === "number"||typeof a === "bigint") && (typeof b === "number"||typeof b === "bigint"))
-      return Number(a)*Number(b);
+    if(itrLang_isrational(a) && itrLang_isrational(b)){
+      a=new Fraction(a);b=new Fraction(b);
+      return new Fraction(a.numerator*b.numerator,a.denominator*b.denominator);
+    }
+    if(itrLang_isreal(a)&& itrLang_isreal(b))
+      return itrLang_asReal(a)*itrLang_asReal(b);
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   if(a instanceof Matrix&&b instanceof Matrix){
@@ -461,10 +609,10 @@ function itrLang_multiply(a,b){
   throw `incompatible types for multiplication: ${a.constructor.name} and ${b.constructor.name}`;
 }
 function itrLang_pow(a,b){
-  if(typeof a === "bigint"&&typeof b === "bigint"){
+  if(itrLang_isint(a)&&itrLang_isint(b)){
     return a**b;
   }
-  if(itrLang_ismatrix(a)&&typeof b === "bigint"){
+  if(itrLang_ismatrix(a)&&itrLang_isint(b)){
     if(b<0n){
       return itrLang_invert(itrLang_pow(a,-b));
     }
@@ -739,7 +887,7 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     case ord('-'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x-y));
+        itrLang_pushValue(itrLang_subtract(a,b));
       }break;
     case ord('·'):{//point-wise multiplication
         let b=itrLang_popValue();
@@ -754,56 +902,56 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     case ord(':'):{//integer division
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x/y));
+        itrLang_pushValue(itrLang_intDivide(a,b));
       }break;
     case ord('%'):{// remainder
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x%y));
+        itrLang_pushValue(itrLang_remainder(a,b));
       }break;
     case ord('&'):{// bit-wise and
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x&y));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_asInt(x)&itrLang_asInt(y)));
       }break;
     case ord('|'):{//  bit-wise or
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x|y));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_asInt(x)|itrLang_asInt(y)));
       }break;
     case ord('x'):{//  bit-wise xor
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>x^y));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_asInt(x)^itrLang_asInt(y)));
       }break;
     case ord('>'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)>0n)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)>0)));
       }break;
     case ord('='):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)==0n)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)==0)));
       }break;
     case ord('<'):{
         let b=itrLang_popValue();
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt((x-y)<0n)));
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)<0)));
       }break;
     case ord('¬'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(x==0n)));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_compareNumbers(x,0n)==0)));
       }break;
     case ord('¿'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(x!=0n)));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_compareNumbers(x,0n)!=0)));
       }break;
     case ord('~'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>-x));
+        itrLang_pushValue(itrLang_negate(a));
       }break;
-    case ord('º'):{
+    case ord('º'):{//TODO add support for different types
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_unaryNumberOp(a,(x)=>{let l=[];for(let i=0n;i<x;i++)l.push(i);return l;}));
       }break;
@@ -876,9 +1024,8 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       itrLang_pushValue(v);
       }break;
     case ord('Í'):{//put nonzero element at indices given by vector
-      let v=itrLang_asArray(itrLang_popValue());
+      let v=itrLang_asArray(itrLang_popValue()).map(x=>itrLang_asInt(x));
       let f=(v)=>{
-        //XXX convert all elements to int
         let M=v.reduce((m, e) => e > m ? e : m,0n);
         let res=new Array(Number(M)+1);
         res.fill(0n);

@@ -2,7 +2,7 @@
 
 ItrLang is an Array-based programming Language designed for code golfing.
 
-ItrLang has built-in support for unbounded Integers, Matrix operations <i>as well as Rational and Complex number</i> (not yet implemented).
+ItrLang has built-in support for unbounded Integers, Matrix operations as well as Rational <i>and Complex number</i> (not yet implemented).
 
 ## Character Encoding
 
@@ -116,12 +116,12 @@ binary:
 ## Array operations
 
 * `°` concatenation, numbers and matrices are implicitly warped in a single element array
-<!-- TODO describe map operation -->
 * `S` sum up all elements of the top stack element, matrices are implicitly converted to nested arrays and numbers are converted to their one-based range (see `¹` conversion operator)
 * `Ì` replace array with an array containing the indices of its non-zero elements, numbers and matrices are implicitly warped in a single element array
-* `Í` replace array with an array that has ones that the positions specified by the argument, numbers and matrices are implicitly warped in a single element array
+* `Í` replace array with an array that has ones that the positions specified by the argument (rounded to the nearest integer), numbers and matrices are implicitly warped in a single element array
 
 * `µ` map: apply next operation to all elements of the current element converted to a vector
+<!-- TODO describe map operation -->
 
 ## Type-conversion
 
