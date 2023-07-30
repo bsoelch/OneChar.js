@@ -261,7 +261,7 @@ function itrLang_parseString(str){
   //TODO trim spaces
   //XXX? support hex/binary numbers
   let isNumber=true;
-  str.forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});//TODO only detect numbers if all digits are consecutive
+  str.forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});
   if(isNumber){
     let v=0n;
     str.forEach(c=>{v*=10n;v+=c-ord('0');});
@@ -697,7 +697,87 @@ function itrLang_finishedSubroutine(){
     itrLang_printValue(itrLang_peekValue(),true);
   }
 }
-//TODO add function for counting bytes in itr-lang program using the specified encoding
+
+//load ItrLang file from given byte array
+function itrLang_loadFromBytes(bytes){
+  if(!(bytes instanceof Uint8Array))
+    throw new Error(`expected Uint8Array got ${bytes.constructor.name}`);
+  let stringMode=false;
+  sourceCode=[];
+  let string=[];
+  for(let i=0;i<bytes.length;i++){
+    let b=bytes[i];
+    if(stringMode){
+      if(b==ord('"')){
+        // TODO custom UTF-8 en/decoding allowing "illegal" code-points:
+        //   0x80 - 0xbf outside sequence, characters outside unicode, sequences that are shorter than specified ...
+        sourceCode=sourceCode.concat([...utf8Decode.decode(new Uint8Array(string))].map(c=>ord(c)));
+        sourceCode.push(BigInt(b));//closing "
+        stringMode=false;
+        string=[];
+        continue;
+      }else if(b==ord('\\')){
+        string.push(b);
+        b=bytes[++i];
+      }
+      string.push(b);
+      continue;
+    }
+    if(b==ord('\'')){
+      sourceCode.push(BigInt(b));
+      b=bytes[++i];
+      sourceCode.push(BigInt(b));
+      if(b&0xC0){//read number of bytes given by leading byte
+        let n=1+((b&0xE0)==0xE0)+((b&0xF0)==0xF0)+((b&0xF8)==0xF8)+((b&0xFC)==0xFC)+((b&0xFE)==0xFE)+(b==0xFF);// length of remaining UTF-8 sequence
+        for(;n>0;n--){
+          b=bytes[i];
+          if(b&0xC0!=0x80)//no longer within UTF-8 sequence
+            break;
+          sourceCode.push(BigInt(b));
+          i++;
+        }
+      }
+      continue;
+    }else if(b==ord('"')){
+      stringMode=true;
+    }
+    sourceCode.push(BigInt(b));
+  }
+}
+//convert itrLang code to bytes array
+function itrLang_toBytes(){
+  //XXX option to abuse extended Unicode set (use malformed sequences to save bytes)
+  let bytes=[];
+  let string="";
+  let stringMode=false;
+  for(let i=0;i<sourceCode.length;i++){
+    let c=sourceCode[i];
+    if(stringMode){
+      if(c==ord('"')){//XXX use custom Unicode encoder
+        bytes=bytes.concat([...utf8Encode.encode(string)]);
+        bytes.push(Number(c));//closing "
+        stringMode=false;
+        string="";
+        continue;
+      }else if(c==ord('\\')){
+        string+=String.fromCodePoint(Number(c));
+        c=sourceCode[++i];
+      }
+      string+=String.fromCodePoint(Number(c));
+      continue;
+    }
+    if(c==ord('\'')){
+      bytes.push(Number(c));
+      c=sourceCode[++i];
+      bytes=bytes.concat([...utf8Encode.encode(String.fromCodePoint(Number(c)))]);
+      continue;
+    }else if(c==ord('"')){
+      stringMode=true;
+    }
+    bytes.push(Number(c));
+  }
+  return new Uint8Array(bytes);
+}
 
 function itrLang_stepProgram(){//TODO add support for code-strings »«
   command=readInstruction(ip++);
