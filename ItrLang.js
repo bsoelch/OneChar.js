@@ -216,7 +216,7 @@ function itrLang_parseString(str){
     }
     return buff;
   }
-  if(str[0]==ord('(')){
+  if(str[0]==ord('(')){//XXX parsing for nested brackets seems to be broken
     let rows=[];
     let i=0;
     while(i++<str.length){
@@ -260,6 +260,8 @@ function itrLang_parseString(str){
   }
   //TODO trim spaces
   //XXX? support hex/binary numbers
+  //TODO support floats&fractions
+  //FIXME support negative numbers
   let isNumber=true;
   str.forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});
   if(isNumber){
@@ -1103,12 +1105,13 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
         itrLang_pushValue(f(v));
         break;
       }
-      v=v.map(e=>f(itrLang_toArray(e)));
+      v=v.map(e=>f(itrLang_asArray(e)));
       itrLang_pushValue(v);
       }break;
     case ord('Í'):{//put nonzero element at indices given by vector
-      let v=itrLang_asArray(itrLang_popValue()).map(x=>itrLang_asInt(x));
+      let v=itrLang_asArray(itrLang_popValue());
       let f=(v)=>{
+        v=v.map(x=>itrLang_asInt(x));
         let M=v.reduce((m, e) => e > m ? e : m,0n);
         let res=new Array(Number(M)+1);
         res.fill(0n);
@@ -1119,7 +1122,7 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
         itrLang_pushValue(f(v));
         break;
       }
-      v=v.map(e=>f(itrLang_toArray(e)));
+      v=v.map(e=>f(itrLang_asArray(e)));
       itrLang_pushValue(v);
       }break;
     case ord('®'):{// vector to matrix
