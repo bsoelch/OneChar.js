@@ -261,13 +261,13 @@ function itrLang_parseString(str){
   //TODO trim spaces
   //XXX? support hex/binary numbers
   //TODO support floats&fractions
-  //FIXME support negative numbers
   let isNumber=true;
-  str.forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});
+  let negative=str[0]==ord('-');
+  (negative?str.slice(1):str).forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});
   if(isNumber){
     let v=0n;
-    str.forEach(c=>{v*=10n;v+=c-ord('0');});
-    return v;
+    (negative?str.slice(1):str).forEach(c=>{v*=10n;v+=c-ord('0');});
+    return negative?-v:v;
   }
   return str;
 }
