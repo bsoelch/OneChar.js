@@ -240,7 +240,7 @@ function itrLang_parseString(str){
         }
         buff.push(itrLang_parseString(str.slice(i0,i)));
       }else{
-        while(i<str.length&&!itrLang_isspace(str[i])&&str[i]!=ord(',')&&str[i]!=ord(')'))i++;
+        while(i<str.length&&!itrLang_isspace(str[i])&&str[i]!=ord(',')&&str[i]!=ord('(')&&str[i]!=ord(')'))i++;
         if(i0!=i||(str[i]!=ord(')')))
           buff.push(itrLang_parseString(str.slice(i0,i)));
       }
@@ -250,6 +250,8 @@ function itrLang_parseString(str){
         rows.push(buff);
         buff=[];
       }
+      if([ord('('),ord('['),ord('{'),ord('"')].indexOf(str[i])>=0)
+        i--;//ensure opening bracket is not skipped
     }
     if(rows.length>0){
       if(buff.length>0)
@@ -852,6 +854,28 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     itrLang_pushValue(itrLang_parseString(str));
     return;
   }
+  if(command==ord('»')){
+    let str=[];//position of "
+    let level=1;
+    while(ip<sourceCode.length){
+      command=readInstruction(ip++);
+      if(command==ord('«')){
+        level--;
+        if(level==0)
+          break;
+      }else if(command==ord('»')){
+        level++;
+      }
+      str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+    }
+    if(mapBy){
+      itrLang_map([...utf8Decode.decode(new Uint8Array(str.map(c=>Number(c))))].map(c=>ord(c)));
+      mapBy=false;
+      return;
+    }
+    itrLang_pushValue(str);
+    return;
+  }
   switch(command){
     case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
     case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
@@ -859,7 +883,7 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     case ord(' '):case ord('\t'):case ord('\n'):case ord('\r')://ignore spaces
       break;
     //comments
-    case ord(';'):
+    case ord(';')://XXX? use « for comments
       while(ip++<sourceCode.length){
         if(readInstruction(ip)==ord('\n'))
           break;
