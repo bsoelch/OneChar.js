@@ -610,6 +610,9 @@ function itrLang_multiply(a,b){
 }
 function itrLang_pow(a,b){
   if(itrLang_isint(a)&&itrLang_isint(b)){
+    if(b<0n){
+      return new Fraction(1n,itrLang_pow(a,-b));
+    }
     return a**b;
   }
   if(itrLang_ismatrix(a)&&itrLang_isint(b)){
