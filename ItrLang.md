@@ -1,18 +1,18 @@
-# Itr-Lang
+# Itr
 
-ItrLang is an Array-based programming Language designed for code golfing.
+_Itr_ is an Array-based programming Language designed for code golfing.
 
-ItrLang has built-in support for unbounded Integers, Matrix operations as well as Rational <i>and Complex number</i> (not yet implemented).
+_Itr_ has built-in support for unbounded Integers, Matrix operations as well as Rational <i>and Complex number</i> (not yet implemented).
 
 ## Character Encoding
 
-ItrLang uses a mixed character encoding:
+_Itr_ uses a mixed character encoding:
 * The source code uses only the first 256 Unicode code-points with each code-point being stored in a single byte.
 * The character after `'` (a char literal) as well as all characters within a UTF8-string `"..."` are encoded using UTF-8, allowing the use of higher code-points (at the cost of a few bytes for encoding intermediate code-points
 
 ## General syntax
 
-ItrLang is a stack-based language.
+_Itr_ is a stack-based language.
 
 All operators are post-fix operators unless explicitly stated otherwise.
 
