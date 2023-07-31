@@ -115,7 +115,7 @@ function itrLang_printValue(val,detectStrings=false,escapeStrings=false){
       val.forEach(x=>{
         if(!itrLang_isint(x))
           isString=false;
-        if(x<0||x>255)
+        if(x<9||x>0xf4)//character in printable Unicode range
           isString=false;
       });
       if(isString){
@@ -876,6 +876,11 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     itrLang_pushValue(str);
     return;
   }
+  if(mapBy){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks 
+    itrLang_map([command]);
+    mapBy=false;
+    return;
+  }
   switch(command){
     case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
     case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
@@ -1101,7 +1106,6 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       }break;
     case ord('µ'):{//map TODO handle nested µ  µµ -> use map on all sub-lists
         mapBy=true;
-        //XXX? read complete map operation µ*. , µ*"..." , µ*'.  , µ*(...) , µ*?...] , ...
         return;//unfinished operation
       }
     case ord('S'):{// sum
@@ -1111,43 +1115,22 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
           v.forEach(e=>{res=itrLang_add(res,e instanceof Array?f(e):e);});
           return res;
         }
-        if(!mapBy){
-          itrLang_pushValue(f(v));
-          break;
-        }
-        v=v.map(e=>f(itrLang_toArray(e)));
-        itrLang_pushValue(v);
+        itrLang_pushValue(f(v));
       }break;
     case ord('Ì'):{//indices of nonzero elements
-      let v=itrLang_asArray(itrLang_popValue());
-      let f=(v)=>{
+        let v=itrLang_asArray(itrLang_popValue());
         let res=[];
         for(let i=0n;i<v.length;i++)if(itrLang_asBool(v[i]))res.push(i);
-        return res;
-      }
-      if(!mapBy){
-        itrLang_pushValue(f(v));
-        break;
-      }
-      v=v.map(e=>f(itrLang_asArray(e)));
-      itrLang_pushValue(v);
+        itrLang_pushValue(res);
       }break;
     case ord('Í'):{//put nonzero element at indices given by vector
-      let v=itrLang_asArray(itrLang_popValue());
-      let f=(v)=>{
+        let v=itrLang_asArray(itrLang_popValue());
         v=v.map(x=>itrLang_asInt(x));
         let M=v.reduce((m, e) => e > m ? e : m,0n);
         let res=new Array(Number(M)+1);
         res.fill(0n);
         v.forEach(e=>res[e]=1n);
-        return res;
-      }
-      if(!mapBy){
-        itrLang_pushValue(f(v));
-        break;
-      }
-      v=v.map(e=>f(itrLang_asArray(e)));
-      itrLang_pushValue(v);
+        itrLang_pushValue(res);
       }break;
     case ord('®'):{// vector to matrix
         let v=itrLang_popValue();
@@ -1166,5 +1149,4 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
     default:
       break;
   }
-  mapBy=false;//operation not compatible with map
 }
