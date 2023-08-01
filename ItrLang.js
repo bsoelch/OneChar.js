@@ -286,7 +286,7 @@ function itrLang_readBracket(left,right){
     if(k>0)
       c=getchar();
   }
-  valueStack.push(itrLang_parseString(buff));
+  itrLang_pushValue(itrLang_parseString(buff));
   return;
 }
 function itrLang_readWord(){
@@ -307,7 +307,7 @@ function itrLang_readWord(){
       c=getchar();
     }
     buff.push(c);
-    valueStack.push(itrLang_parseString(buff));
+    itrLang_pushValue(itrLang_parseString(buff));
     return;
   }
   if(c==ord('[')){
@@ -325,7 +325,7 @@ function itrLang_readWord(){
   while(c>=0&&!itrLang_isspace(c)){//read until next space
     buff.push(c);c=getchar();
   }
-  valueStack.push(itrLang_parseString(buff));
+  itrLang_pushValue(itrLang_parseString(buff));
 }
 
 function itrLang_isint(x){
@@ -654,41 +654,169 @@ function itrLang_pow(a,b){
   throw `incompatible types for exponentiation: ${a.constructor.name} and ${b.constructor.name}`;
 }
 
-let mapBy=false;
+const ITR_OP_NONE=0;
+const ITR_OP_MAP=1;
+const ITR_OP_REDUCE=2;
+const ITR_OP_FLAT_MAP=3;
+const ITR_OP_ZIP=4;//TODO zip operation
+const ITR_OP_CAUCHY=5;//Cauchy-product
+let itrOp=ITR_OP_NONE;
+
 class ForEachLoop{
-  constructor(vector){
+  constructor(vector,opType=ITR_OP_MAP){
     this.vector=vector;
+    this.unwrap=(opType==ITR_OP_REDUCE||opType==ITR_OP_FLAT_MAP);
+    this.index=(opType==ITR_OP_REDUCE)?2:1;
+  }
+}
+class ZipLoop{
+  constructor(left,right){
+    this.left=left;
+    this.right=right;
     this.index=1;
   }
 }
-function itrLang_map(code){
-  let vector=itrLang_toArray(itrLang_popValue());
-  if(vector.length==0){
-    itrLang_pushValue(vector);
+class CauchyItr{
+  constructor(left,right){
+    this.left=left;
+    this.right=right;
+    this.sum=0;
+    this.leftIndex=1;
+  }
+}
+function itrLang_applyItrOp(code){
+  if(itrOp==ITR_OP_NONE)
+    return;
+  if(itrOp==ITR_OP_MAP||itrOp==ITR_OP_REDUCE||itrOp==ITR_OP_FLAT_MAP){
+    let vector=itrLang_toArray(itrLang_popValue());
+    if(vector.length==0){
+      if(itrOp==ITR_OP_MAP)
+        itrLang_pushValue(vector);
+      return;
+    }
+    let loop=new ForEachLoop(vector,itrOp);
+    if(itrOp==ITR_OP_REDUCE){
+      if(vector.length==1){
+        itrLang_pushValue(vector[0]);
+        return;
+      }
+      itrLang_pushValue(vector[0]);
+      itrLang_pushValue(vector[1]);
+    }else if(itrOp==ITR_OP_FLAT_MAP){
+      itrLang_pushValue(vector[0]);
+    }else{
+      stackStack.push(valueStack);
+      valueStack=[vector[0]];
+    }
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(loop);
+    sourceCode=code;
+    ip=0;
+    itrOp=ITR_OP_NONE;
     return;
   }
-  stackStack.push(valueStack);
-  valueStack=[vector[0]];
-  callStackPush(ip);
-  callStackPush(sourceCode);
-  callStackPush(new ForEachLoop(vector));
-  sourceCode=code;
-  ip=0;
+  if(itrOp==ITR_OP_ZIP){
+    let right=itrLang_toArray(itrLang_popValue());
+    let left=itrLang_toArray(itrLang_popValue());
+    if(left.length==0&&right.length==0){
+      itrLang_pushValue(left);
+      return;
+    }
+    let loop=new ZipLoop(left,right,false);
+    stackStack.push(valueStack);
+    valueStack=[left.length>0?left[0]:0,right.length>0?right[0]:0];
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(loop);
+    sourceCode=code;
+    ip=0;
+    itrOp=ITR_OP_NONE;
+    return;
+  }
+  if(itrOp==ITR_OP_CAUCHY){
+    let right=itrLang_toArray(itrLang_popValue());
+    let left=itrLang_toArray(itrLang_popValue());
+    if(left.length==0||right.length==0){
+      itrLang_pushValue(left);
+      return;
+    }
+    let loop=new CauchyItr(left,right,false);
+    stackStack.push(valueStack);
+    stackStack.push([]);
+    valueStack=[left[0],right[0]];
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(loop);
+    sourceCode=code;
+    ip=0;
+    itrOp=ITR_OP_NONE;
+    return;
+  }
+  throw Error(`unknown itr-operation ${itrOp}`);
 }
 
 function itrLang_finishedSubroutine(){
   numberMode=false;
-  mapBy=false;
+  itrOp=ITR_OP_NONE;
   if(!callStackEmpty() && callStackPeek() instanceof ForEachLoop){
     let loop=callStackPeek();
     if(loop.index<loop.vector.length){
-      valueStack.push(loop.vector[loop.index++]);
+      itrLang_pushValue(loop.vector[loop.index++]);
       ip=0;
       return;
     }
     callStackPop();
     sourceCode=callStackPop();
     ip=callStackPop();
+    if(!loop.unwrap){
+      let oldStack=itrLang_popStack();
+      oldStack.push(valueStack);
+      valueStack=oldStack;
+    }
+    return;
+  }
+  if(!callStackEmpty() && callStackPeek() instanceof ZipLoop){
+    let loop=callStackPeek();
+    if(loop.index<loop.left.length&&loop.index<loop.right.length){
+      itrLang_pushValue(loop.left.length>loop.index?loop.left[loop.index]:0);
+      itrLang_pushValue(loop.right.length>loop.index?loop.right[loop.index]:0);
+      loop.index++;
+      ip=0;
+      return;
+    }
+    callStackPop();
+    sourceCode=callStackPop();
+    ip=callStackPop();
+    return;
+  }
+  if(!callStackEmpty() && callStackPeek() instanceof CauchyItr){
+    let iterator=callStackPeek();
+    if(iterator.leftIndex>iterator.sum||iterator.leftIndex>=iterator.left.length){
+      iterator.sum++;
+      iterator.leftIndex=Math.max(0,iterator.sum-iterator.right.length+1);
+      let slots=itrLang_popStack();
+      slots.push(valueStack);
+      stackStack.push(slots);
+      valueStack=[];
+    }
+    if(iterator.sum<iterator.left.length+iterator.right.length-1){
+      itrLang_pushValue(iterator.left[iterator.leftIndex]);
+      itrLang_pushValue(iterator.right[iterator.sum-iterator.leftIndex]);
+      iterator.leftIndex++;
+      ip=0;
+      return;
+    }
+    callStackPop();
+    sourceCode=callStackPop();
+    ip=callStackPop();
+    if(valueStack.length>0){ //TODO check if this code is reachable
+      console.log("unreachable?");
+      let slots=itrLang_popStack();
+      slots.push(valueStack);
+      stackStack.push(slots);
+    }
+    valueStack=itrLang_popStack();
     let oldStack=itrLang_popStack();
     oldStack.push(valueStack);
     valueStack=oldStack;
@@ -786,7 +914,9 @@ function itrLang_toBytes(){
   return new Uint8Array(bytes);
 }
 
-function itrLang_stepProgram(){//TODO add support for code-strings »«
+//TODO add implicit # if code contains no read instructions
+//XXX? allow reading input multiple times/ save first ... input elements in variables
+function itrLang_stepProgram(){
   command=readInstruction(ip++);
   if(ip>sourceCode.length||command==ord('\0')){
     itrLang_finishedSubroutine();
@@ -804,11 +934,11 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
   if(command==ord('\'')){
     command=readInstruction(ip++);
     let char=[...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c));
-    if(mapBy){
+    if(itrOp==ITR_OP_MAP){
       let v=itrLang_toArray(itrLang_popValue());
       v=v.map(x=>char);
       itrLang_pushValue(v);
-      mapBy=false;
+      itrOp=ITR_OP_NONE;
     }else{
       itrLang_pushValue(char);//push char as string (converted to UTF-8)
     }
@@ -823,12 +953,12 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       numberMode=true;
     }
     command=readInstruction(ip);
-    if(mapBy&&(command<ord('0')||command>ord('9'))){// µ followed by number
+    if((itrOp==ITR_OP_MAP)&&(command<ord('0')||command>ord('9'))){// µ followed by number
       let n=itrLang_popValue();
       let v=itrLang_toArray(itrLang_popValue());
       v=v.map(x=>n);
       itrLang_pushValue(v);
-      mapBy=false;
+      itrOp=ITR_OP_NONE;
     }
     return;
   }
@@ -846,9 +976,8 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
         str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
       }
     }
-    if(mapBy){
-      itrLang_map([...utf8Decode.decode(new Uint8Array(str.slice(1,str.length-1).map(c=>Number(c))))].map(c=>ord(c)));
-      mapBy=false;
+    if(itrOp!=ITR_OP_NONE){
+      itrLang_applyItrOp([...utf8Decode.decode(new Uint8Array(str.slice(1,str.length-1).map(c=>Number(c))))].map(c=>ord(c)));
       return;
     }
     itrLang_pushValue(itrLang_parseString(str));
@@ -868,17 +997,15 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       }
       str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
     }
-    if(mapBy){
-      itrLang_map([...utf8Decode.decode(new Uint8Array(str.map(c=>Number(c))))].map(c=>ord(c)));
-      mapBy=false;
+    if(itrOp!=ITR_OP_NONE){
+      itrLang_applyItrOp([...utf8Decode.decode(new Uint8Array(str.map(c=>Number(c))))].map(c=>ord(c)));
       return;
     }
     itrLang_pushValue(str);
     return;
   }
-  if(mapBy){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks 
-    itrLang_map([command]);
-    mapBy=false;
+  if(itrOp!=ITR_OP_NONE){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks 
+    itrLang_applyItrOp([command]);
     return;
   }
   switch(command){
@@ -903,7 +1030,7 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       for(;i<valueStack.length&&valueStack[i].isRow;)i++;
       tail=valueStack.splice(i);
       tail.isRow=true;
-      valueStack.push(tail);
+      itrLang_pushValue(tail);
       }break;
     case ord(')'):{//end tuple
       let prevStack=itrLang_popStack();
@@ -912,7 +1039,7 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
       if(i>0){
         tail=valueStack.splice(i);
         tail.isRow=true;
-        valueStack.push(tail);
+        itrLang_pushValue(tail);
         prevStack.push(new Matrix(valueStack));
       }else{
         prevStack.push(valueStack);
@@ -1104,8 +1231,24 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
       }break;
-    case ord('µ'):{//map TODO handle nested µ  µµ -> use map on all sub-lists
-        mapBy=true;
+    case ord('µ'):{//map TODO handle chained iterator-operations  µµ -> use map on all sub-lists
+        itrOp=ITR_OP_MAP;
+        return;//unfinished operation
+      }
+    case ord('R'):{//reduce
+        itrOp=ITR_OP_REDUCE;
+        return;//unfinished operation
+      }
+    case ord('M'):{//flat-map
+        itrOp=ITR_OP_FLAT_MAP;
+        return;//unfinished operation
+      }
+    case ord('Z'):{//zip
+        itrOp=ITR_OP_ZIP;
+        return;//unfinished operation
+      }
+    case ord('C'):{//cauchy-product
+        itrOp=ITR_OP_CAUCHY;
         return;//unfinished operation
       }
     case ord('S'):{// sum
@@ -1113,6 +1256,15 @@ function itrLang_stepProgram(){//TODO add support for code-strings »«
         let f=(v)=>{
           let res=0n;
           v.forEach(e=>{res=itrLang_add(res,e instanceof Array?f(e):e);});
+          return res;
+        }
+        itrLang_pushValue(f(v));
+      }break;
+    case ord('P'):{// product
+        let v=itrLang_toArray(itrLang_popValue());
+        let f=(v)=>{
+          let res=1n;
+          v.forEach(e=>{res=itrLang_multiply(res,e instanceof Array?f(e):e);});
           return res;
         }
         itrLang_pushValue(f(v));
