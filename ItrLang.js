@@ -216,7 +216,7 @@ function itrLang_parseString(str){
     }
     return buff;
   }
-  if(str[0]==ord('(')){//XXX parsing for nested brackets seems to be broken
+  if(str[0]==ord('(')){
     let rows=[];
     let i=0;
     while(i++<str.length){
@@ -842,7 +842,7 @@ function itrLang_loadFromBytes(bytes){
   let string=[];
   for(let i=0;i<bytes.length;i++){
     let b=bytes[i];
-    if(stringMode){
+    if(stringMode){//TODO don't detect strings in comments
       if(b==ord('"')){
         // TODO custom UTF-8 en/decoding allowing "illegal" code-points:
         //   0x80 - 0xbf outside sequence, characters outside unicode, sequences that are shorter than specified ...
@@ -887,7 +887,7 @@ function itrLang_toBytes(){
   let stringMode=false;
   for(let i=0;i<sourceCode.length;i++){
     let c=sourceCode[i];
-    if(stringMode){
+    if(stringMode){//TODO don't detect strings in comments
       if(c==ord('"')){//XXX use custom Unicode encoder
         bytes=bytes.concat([...utf8Encode.encode(string)]);
         bytes.push(Number(c));//closing "
@@ -1192,13 +1192,42 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_negate(a));
       }break;
-    case ord('º'):{//TODO add support for different types
+    case ord('º'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,(x)=>{let l=[];for(let i=0n;i<x;i++)l.push(i);return l;}));
+        if(itrLang_isnumber(a)){//XXX? 2D range for complex numbers
+          let r=[];
+          for(let i=0n;itrLang_compareNumbers(i,x)<0;i++)
+            r.push(i);
+          itrLang_pushValue(r);
+          break;
+        }
+        if(a instanceof Array){
+          let r=[];
+          for(let i=0;i<=a.length;i++)
+            r.push(a.slice(0,i));
+          itrLang_pushValue(r);
+          break;
+        }
+        //XXX? what is the range of a matrix
+        throw Error(`unsopported operand for ${String.fromCodePoint(command)}: ${a.constructor.name}`);
       }break;
     case ord('¹'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,(x)=>{let l=[];for(let i=1n;i<=x;i++)l.push(i);return l;}));
+        if(itrLang_isnumber(a)){
+          let r=[];
+          for(let i=1n;itrLang_compareNumbers(i,x)<=0;i++)
+            r.push(i);
+          itrLang_pushValue(r);
+          break;
+        }
+        if(a instanceof Array){
+          let r=[];
+          for(let i=1;i<=a.length;i++)
+            r.push(a.slice(0,i));
+          itrLang_pushValue(r);
+          break;
+        }
+        throw Error(`unsopported operand for ${String.fromCodePoint(command)}: ${a.constructor.name}`);
       }break;
     case ord('L'):{//length
         let a=itrLang_popValue();
