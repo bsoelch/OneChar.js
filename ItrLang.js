@@ -834,27 +834,37 @@ function itrLang_finishedSubroutine(){
 }
 
 function itrLang_readCodepoint(bytes,offset,out){//extended UTF8 decoder
-  let b=bytes[offset++];
+  let b=offset<bytes.length?bytes[offset++]:0;
   let cpBytes=[b];
   if((b&0xC0)==0xC0){//read number of bytes given by leading byte
     let n=1+((b&0xE0)==0xE0)+((b&0xF0)==0xF0)+((b&0xF8)==0xF8)+((b&0xFC)==0xFC)+((b&0xFE)==0xFE)+(b==0xFF);// length of remaining UTF-8 sequence
     for(;n>0;n--){
-      b=bytes[offset];
-      if((b&0xC0)!=0x80)//no longer within UTF-8 sequence
-        break;
+      b=offset<bytes.length?bytes[offset]:0x80;
       cpBytes.push(b);
       offset++;
     }
   }
-  console.log(cpBytes);
   if(cpBytes.length==1){
     out.push(BigInt(cpBytes[0]));
   }else{
-    let cp=BigInt(cpBytes[0]&(0xff>>(cpBytes.length))); // ignore leading ones in correct UTF-8 sequences
+    let cp=0n;
+    // use two high bits of bytes in sequence to store high bits of number, if the byte sequence is correct UTF-8, the high bits will be zero
+    cpBytes.slice(1).forEach(b=>{cp<<=2n;cp|=BigInt((b>>6)^0x2)});
+    // mask out ones at start of high byte
+    cp|=BigInt(cpBytes[0]&(0xff>>(cpBytes.length)));
+    // append remaining bits, according to UTF-8 rules
     cpBytes.slice(1).forEach(b=>{cp<<=6n;cp|=BigInt(b&0x3f)});
     out.push(cp);
   }
   return offset;
+}
+function itrLang_decodeUTF8(bytes){
+  let offset=0;
+  let codepoints=[];
+  while(offset<bytes.length){
+    offset=itrLang_readCodepoint(bytes,offset,codepoints);
+  }
+  return codepoints;
 }
 //load ItrLang file from given byte array
 function itrLang_loadFromBytes(bytes){
@@ -998,11 +1008,12 @@ function itrLang_stepProgram(){
         str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
       }
     }
+    str=itrLang_parseString(str);
     if(itrOp!=ITR_OP_NONE){
-      itrLang_applyItrOp([...utf8Decode.decode(new Uint8Array(str.slice(1,str.length-1).map(c=>Number(c))))].map(c=>ord(c)));
+      itrLang_applyItrOp(itrLang_decodeUTF8(str.map(c=>Number(c))));
       return;
     }
-    itrLang_pushValue(itrLang_parseString(str));
+    itrLang_pushValue(str);
     return;
   }
   if(command==ord('»')){
@@ -1020,13 +1031,13 @@ function itrLang_stepProgram(){
       str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
     }
     if(itrOp!=ITR_OP_NONE){
-      itrLang_applyItrOp([...utf8Decode.decode(new Uint8Array(str.map(c=>Number(c))))].map(c=>ord(c)));
+      itrLang_applyItrOp(itrLang_decodeUTF8(str.map(c=>Number(c))));
       return;
     }
     itrLang_pushValue(str);
     return;
   }
-  if(itrOp!=ITR_OP_NONE){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks 
+  if(itrOp!=ITR_OP_NONE){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks
     itrLang_applyItrOp([command]);
     return;
   }
@@ -1073,7 +1084,7 @@ function itrLang_stepProgram(){
       callStackPush(ip);
       callStackPush(sourceCode);
       sourceCode=itrLang_toArray(itrLang_popValue());
-      sourceCode=[...utf8Decode.decode(new Uint8Array(sourceCode.map(c=>Number(c))))].map(c=>ord(c));//get string code-points
+      sourceCode=itrLang_decodeUTF8(sourceCode.map(c=>Number(c)));//get string code-points
       ip=0;
       break;
     case ord('?'):
