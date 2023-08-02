@@ -1256,7 +1256,7 @@ function itrLang_stepProgram(){
     itrLang_pushValue(str);
     return;
   }
-  if(itrOp!=ITR_OP_NONE){//XXX treat if/while blocks (  ? ... ] ? ... [  ) as blocks
+  if(itrOp!=ITR_OP_NONE){
     itrLang_applyItrOp([command]);
     return;
   }
@@ -1305,9 +1305,6 @@ function itrLang_stepProgram(){
       sourceCode=itrLang_toArray(itrLang_popValue());
       sourceCode=itrLang_decodeUTF8(sourceCode.map(c=>Number(c)));//get string code-points
       ip=0;
-      break;
-    case ord('?'):
-      // TODO start if-block
       break;
     // stack operations
     case ord('ä'):{//dup
@@ -1552,6 +1549,12 @@ function itrLang_stepProgram(){
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
       }break;
+    case ord('?')://exists
+      throw new Error("unimplemented");
+      break;
+    case ord('!')://for-all
+      throw new Error("unimplemented");
+      break;
     case ord('µ'):{//map TODO handle chained iterator-operations  µµ -> use map on all sub-lists
         itrOp=ITR_OP_MAP;
         return;//unfinished operation
