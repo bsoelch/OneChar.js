@@ -1,6 +1,6 @@
 # OneChar.js
 
-Online interpreter for [ForWhile](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
+Online interpreter for [Itr](https://github.com/bsoelch/OneChar.js/blob/main/ItrLang.md), [ForWhile](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
 
 ## Usage
 
@@ -19,11 +19,23 @@ The output of the programs will be printed to the `Output:` box.
 
 The interpreted uses `ForWhile` by default, the language can be changed using `lang=?` in the query of the URL.
 
+### [Itr](https://github.com/bsoelch/OneChar.js/blob/main/ItrLang.md)
+
+Array-based golfing language
+
+[Hello, World](https://bsoelch.github.io/OneChar.js/?lang=Itr&src=IkhlbGxvLCBXb3JsZCEi):
+
+```
+"Hello World!"
+```
+
+
+
 ### [ForWhile](https://esolangs.org/wiki/ForWhile)
 
 Stack-based programming language without infinite Loops
 
-[Helllo, World](https://bsoelch.github.io/OneChar.js/?lang=ForWhile&src=IkhlbGxvLCBXb3JsZCEiKCwjKQ==):
+[Hello, World](https://bsoelch.github.io/OneChar.js/?lang=ForWhile&src=IkhlbGxvLCBXb3JsZCEiKCwjKQ==):
 
 ```
 "Hello World!"(,#)
@@ -65,5 +77,3 @@ Similar to regular Brainfuck with the following changes:
 * `(` starts a for-loop setting the loop-counter to the current cell
   If the current cell is negative, the loop-counter will be set to its absolute value and the roles of `+` and `-` will be swapped within the loop.
 * `)` decrements the loop counter, jumps back to the matching `)` if the loop-counter is non-zero and the current cell is positive
-
-
