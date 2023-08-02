@@ -658,8 +658,10 @@ const ITR_OP_NONE=0;
 const ITR_OP_MAP=1;
 const ITR_OP_REDUCE=2;
 const ITR_OP_FLAT_MAP=3;
-const ITR_OP_ZIP=4;//TODO zip operation
+const ITR_OP_ZIP=4;//zip operation
 const ITR_OP_CAUCHY=5;//Cauchy-product
+const ITR_OP_TIMES=6;//go through all elements of cross product
+//XXX go through all subsets
 let itrOp=ITR_OP_NONE;
 
 class ForEachLoop{
@@ -677,9 +679,10 @@ class ZipLoop{
   }
 }
 class CauchyItr{
-  constructor(left,right){
+  constructor(left,right,flat=false){
     this.left=left;
     this.right=right;
+    this.flat=flat;
     this.sum=0;
     this.leftIndex=1;
   }
@@ -723,7 +726,7 @@ function itrLang_applyItrOp(code){
       itrLang_pushValue(left);
       return;
     }
-    let loop=new ZipLoop(left,right,false);
+    let loop=new ZipLoop(left,right);
     stackStack.push(valueStack);
     valueStack=[left.length>0?left[0]:0,right.length>0?right[0]:0];
     callStackPush(ip);
@@ -744,6 +747,24 @@ function itrLang_applyItrOp(code){
     let loop=new CauchyItr(left,right,false);
     stackStack.push(valueStack);
     stackStack.push([]);
+    valueStack=[left[0],right[0]];
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(loop);
+    sourceCode=code;
+    ip=0;
+    itrOp=ITR_OP_NONE;
+    return;
+  }
+  if(itrOp==ITR_OP_TIMES){
+    let right=itrLang_toArray(itrLang_popValue());
+    let left=itrLang_toArray(itrLang_popValue());
+    if(left.length==0||right.length==0){
+      itrLang_pushValue(left);
+      return;
+    }
+    let loop=new CauchyItr(left,right,true);
+    stackStack.push(valueStack);
     valueStack=[left[0],right[0]];
     callStackPush(ip);
     callStackPush(sourceCode);
@@ -796,9 +817,11 @@ function itrLang_finishedSubroutine(){
       iterator.sum++;
       iterator.leftIndex=Math.max(0,iterator.sum-iterator.right.length+1);
       let slots=itrLang_popStack();
-      slots.push(valueStack);
-      stackStack.push(slots);
-      valueStack=[];
+      if(!iterator.flat){
+        slots.push(valueStack);
+        stackStack.push(slots);
+        valueStack=[];
+      }
     }
     if(iterator.sum<iterator.left.length+iterator.right.length-1){
       itrLang_pushValue(iterator.left[iterator.leftIndex]);
@@ -810,13 +833,14 @@ function itrLang_finishedSubroutine(){
     callStackPop();
     sourceCode=callStackPop();
     ip=callStackPop();
-    if(valueStack.length>0){ //TODO check if this code is reachable
+    if(!iterator.flat&&valueStack.length>0){ //TODO check if this code is reachable
       console.log("unreachable?");
       let slots=itrLang_popStack();
       slots.push(valueStack);
       stackStack.push(slots);
     }
-    valueStack=itrLang_popStack();
+    if(!iterator.flat)
+      valueStack=itrLang_popStack();
     let oldStack=itrLang_popStack();
     oldStack.push(valueStack);
     valueStack=oldStack;
@@ -1183,6 +1207,12 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_remainder(a,b));
       }break;
+    case ord('d'):{//division and remainder
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_remainder(a,b));
+        itrLang_pushValue(itrLang_intDivide(a,b));
+      }break;
     case ord('&'):{// bit-wise and
         let b=itrLang_popValue();
         let a=itrLang_popValue();
@@ -1229,7 +1259,7 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         if(itrLang_isnumber(a)){//XXX? 2D range for complex numbers
           let r=[];
-          for(let i=0n;itrLang_compareNumbers(i,x)<0;i++)
+          for(let i=0n;itrLang_compareNumbers(i,a)<0;i++)
             r.push(i);
           itrLang_pushValue(r);
           break;
@@ -1248,7 +1278,7 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         if(itrLang_isnumber(a)){
           let r=[];
-          for(let i=1n;itrLang_compareNumbers(i,x)<=0;i++)
+          for(let i=1n;itrLang_compareNumbers(i,a)<=0;i++)
             r.push(i);
           itrLang_pushValue(r);
           break;
@@ -1288,10 +1318,21 @@ function itrLang_stepProgram(){
         itrLang_pushValue(itrLang_pow(a,b));
       }break;
     // vector operations
+    case ord('¡'):{
+        let a=itrLang_asArray(itrLang_popValue());
+        itrLang_pushValue(a.toReversed());
+      }break;
     case ord('°'):{
         let b=itrLang_asArray(itrLang_popValue());
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
+      }break;
+    case ord('×'):{
+        let b=itrLang_asArray(itrLang_popValue());
+        let a=itrLang_asArray(itrLang_popValue());
+        let p=[];
+        a.forEach(x=>b.forEach(y=>{p.push([x,y]);}));
+        itrLang_pushValue(p);
       }break;
     case ord('µ'):{//map TODO handle chained iterator-operations  µµ -> use map on all sub-lists
         itrOp=ITR_OP_MAP;
@@ -1305,7 +1346,11 @@ function itrLang_stepProgram(){
         itrOp=ITR_OP_FLAT_MAP;
         return;//unfinished operation
       }
-    case ord('Z'):{//zip
+    case ord('X'):{//cross
+        itrOp=ITR_OP_TIMES;
+        return;//unfinished operation
+      }
+    case ord('Y'):{//zip
         itrOp=ITR_OP_ZIP;
         return;//unfinished operation
       }
