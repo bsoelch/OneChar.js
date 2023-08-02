@@ -805,8 +805,9 @@ const ITR_OP_REDUCE=2;
 const ITR_OP_FLAT_MAP=3;
 const ITR_OP_ZIP=4;//zip operation
 const ITR_OP_CAUCHY=5;//Cauchy-product
-const ITR_OP_TIMES=6;//go through all elements of cross product
-//XXX go through all subsets
+const ITR_OP_TIMES=6;//go through all elements of Cartesian product
+const ITR_OP_SUBSET=7;//go through all elements of power set
+
 let itrOp=ITR_OP_NONE;
 
 class ForEachLoop{
@@ -830,6 +831,13 @@ class CauchyItr{
     this.flat=flat;
     this.sum=0;
     this.leftIndex=1;
+  }
+}
+class SubsetItr{
+  constructor(vector){
+    this.vector=vector;
+    this.index=1n;
+    this.maxIndex=2n**BigInt(vector.length);
   }
 }
 function itrLang_applyItrOp(code){
@@ -919,6 +927,23 @@ function itrLang_applyItrOp(code){
     itrOp=ITR_OP_NONE;
     return;
   }
+  if(itrOp==ITR_OP_SUBSET){
+    let vector=itrLang_toArray(itrLang_popValue());
+    if(vector.length==0){
+      itrLang_pushValue([[]]);
+      return;
+    }
+    let loop=new SubsetItr(vector);
+    stackStack.push(valueStack);
+    valueStack=[[]];
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(loop);
+    sourceCode=code;
+    ip=0;
+    itrOp=ITR_OP_NONE;
+    return;
+  }
   throw Error(`unknown itr-operation ${itrOp}`);
 }
 
@@ -986,6 +1011,31 @@ function itrLang_finishedSubroutine(){
     }
     if(!iterator.flat)
       valueStack=itrLang_popStack();
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
+    return;
+  }
+  if(!callStackEmpty() && callStackPeek() instanceof SubsetItr){
+    let iterator=callStackPeek();
+    if(iterator.index<iterator.maxIndex){
+      let b=1n,i=0;
+      let subset=[];
+      while(b<iterator.maxIndex){
+        if(b&iterator.index){
+          subset.push(iterator.vector[i]);
+        }
+        i++;
+        b<<=1n;
+      }
+      itrLang_pushValue(subset);
+      iterator.index++;
+      ip=0;
+      return;
+    }
+    callStackPop();
+    sourceCode=callStackPop();
+    ip=callStackPop();
     let oldStack=itrLang_popStack();
     oldStack.push(valueStack);
     valueStack=oldStack;
@@ -1526,6 +1576,10 @@ function itrLang_stepProgram(){
         itrOp=ITR_OP_CAUCHY;
         return;//unfinished operation
       }
+    case ord('¶'):{// power set
+        itrOp=ITR_OP_SUBSET;
+        return;//unfinished operation
+      }break;
     case ord('S'):{// sum
         let v=itrLang_toArray(itrLang_popValue());
         let f=(v)=>{
