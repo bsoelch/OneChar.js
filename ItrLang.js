@@ -1417,6 +1417,10 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_negate(a));
       }break;
+    case ord('¯'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_invert(a));
+      }break;
     case ord('º'):{
         let a=itrLang_popValue();
         if(itrLang_isnumber(a)){//XXX? 2D range for complex numbers
@@ -1552,8 +1556,17 @@ function itrLang_stepProgram(){
         let M=v.reduce((m, e) => e > m ? e : m,0n);
         let res=new Array(Number(M)+1);
         res.fill(0n);
-        v.forEach(e=>res[e]=1n);
+        v.forEach(e=>e>=0n&&(res[e]=1n));
         itrLang_pushValue(res);
+      }break;
+    case ord('@'):{//replace number with corresponding element of vector
+        let I=itrLang_popValue();
+        let v=itrLang_toArray(itrLang_popValue());
+        let f=(e)=>{
+          e=itrLang_asInt(e);
+          return e>=0&&e<v.length?v[e]:0n;
+        };
+        itrLang_pushValue(itrLang_unaryNumberOp(I,f));
       }break;
     case ord('®'):{// vector to matrix
         let v=itrLang_popValue();
