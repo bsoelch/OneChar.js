@@ -833,6 +833,29 @@ function itrLang_finishedSubroutine(){
   }
 }
 
+function itrLang_readCodepoint(bytes,offset,out){//extended UTF8 decoder
+  let b=bytes[offset++];
+  let cpBytes=[b];
+  if((b&0xC0)==0xC0){//read number of bytes given by leading byte
+    let n=1+((b&0xE0)==0xE0)+((b&0xF0)==0xF0)+((b&0xF8)==0xF8)+((b&0xFC)==0xFC)+((b&0xFE)==0xFE)+(b==0xFF);// length of remaining UTF-8 sequence
+    for(;n>0;n--){
+      b=bytes[offset];
+      if((b&0xC0)!=0x80)//no longer within UTF-8 sequence
+        break;
+      cpBytes.push(b);
+      offset++;
+    }
+  }
+  console.log(cpBytes);
+  if(cpBytes.length==1){
+    out.push(BigInt(cpBytes[0]));
+  }else{
+    let cp=BigInt(cpBytes[0]&(0xff>>(cpBytes.length))); // ignore leading ones in correct UTF-8 sequences
+    cpBytes.slice(1).forEach(b=>{cp<<=6n;cp|=BigInt(b&0x3f)});
+    out.push(cp);
+  }
+  return offset;
+}
 //load ItrLang file from given byte array
 function itrLang_loadFromBytes(bytes){
   if(!(bytes instanceof Uint8Array))
@@ -842,53 +865,47 @@ function itrLang_loadFromBytes(bytes){
   let string=[];
   for(let i=0;i<bytes.length;i++){
     let b=bytes[i];
-    if(stringMode){//TODO don't detect strings in comments
+    if(stringMode){
       if(b==ord('"')){
-        // TODO custom UTF-8 en/decoding allowing "illegal" code-points:
-        //   0x80 - 0xbf outside sequence, characters outside unicode, sequences that are shorter than specified ...
-        sourceCode=sourceCode.concat([...utf8Decode.decode(new Uint8Array(string))].map(c=>ord(c)));
         sourceCode.push(BigInt(b));//closing "
         stringMode=false;
         string=[];
         continue;
       }else if(b==ord('\\')){
-        string.push(b);
+        sourceCode.push(BigInt(b));
         b=bytes[++i];
       }
-      string.push(b);
+      i=itrLang_readCodepoint(bytes,i,sourceCode);
+      i--;//do not increment counter
+      continue;
+    }
+    if(b==ord(';')){//skip comment
+      while(i<bytes.length&&bytes[i]!=ord('\n'))
+        i++;
       continue;
     }
     if(b==ord('\'')){
       sourceCode.push(BigInt(b));
-      b=bytes[++i];
-      sourceCode.push(BigInt(b));
-      if(b&0xC0){//read number of bytes given by leading byte
-        let n=1+((b&0xE0)==0xE0)+((b&0xF0)==0xF0)+((b&0xF8)==0xF8)+((b&0xFC)==0xFC)+((b&0xFE)==0xFE)+(b==0xFF);// length of remaining UTF-8 sequence
-        for(;n>0;n--){
-          b=bytes[i];
-          if(b&0xC0!=0x80)//no longer within UTF-8 sequence
-            break;
-          sourceCode.push(BigInt(b));
-          i++;
-        }
-      }
+      i=itrLang_readCodepoint(bytes,++i,sourceCode);
+      i--;//do not increment counter
       continue;
     }else if(b==ord('"')){
       stringMode=true;
     }
     sourceCode.push(BigInt(b));
   }
+  //TODO update GUI
 }
 //convert itrLang code to bytes array
 function itrLang_toBytes(){
-  //XXX option to abuse extended Unicode set (use malformed sequences to save bytes)
+  //XXX option to abuse extended Unicode set (use truncated sequences to save bytes)
   let bytes=[];
   let string="";
   let stringMode=false;
   for(let i=0;i<sourceCode.length;i++){
     let c=sourceCode[i];
-    if(stringMode){//TODO don't detect strings in comments
-      if(c==ord('"')){//XXX use custom Unicode encoder
+    if(stringMode){
+      if(c==ord('"')){
         bytes=bytes.concat([...utf8Encode.encode(string)]);
         bytes.push(Number(c));//closing "
         stringMode=false;
@@ -899,6 +916,11 @@ function itrLang_toBytes(){
         c=sourceCode[++i];
       }
       string+=String.fromCodePoint(Number(c));
+      continue;
+    }
+    if(c==ord(';')){//skip comment
+      while(i<sourceCode.length&&sourceCode[i]!=ord('\n'))
+        i++;
       continue;
     }
     if(c==ord('\'')){
