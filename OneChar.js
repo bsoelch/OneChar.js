@@ -932,18 +932,21 @@ function stepProgram(){
   running=false;
 }
 
-//XXX? run program asynchronously
+let MAX_STEPS=2500;//gives ~4ms computation time per loop works well on my machine
+
+let steps=[]
+
 let progId=0;
-window.addEventListener(//post message is faster than setTimeout/setInterval
-  "message",
-  (event) => {
-    if (event.data !== progId) return;
-    stepProgram();
-    if(running)
-      postMessage(progId);
-  },
-  false
-);
+function programLoop(loopId){
+  if(progId!=loopId)
+    return;
+  if(running)
+    setTimeout(()=>programLoop(loopId),4);//4ms is minimum allowed delay for setTimeout
+  let start=performance.now();
+  for(let i=0;running&i<MAX_STEPS;i++)
+    stepProgram();//do multiple steps each loop instead of one step per frame
+  steps.push(performance.now()-start);
+}
 function runProgram(){
-  postMessage(++progId);
+  programLoop(++progId);
 }
