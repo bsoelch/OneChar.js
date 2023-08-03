@@ -988,7 +988,7 @@ function itrLang_applyItrOp(itrOp,code){
     let iterator=new ForEachItr(vector,itrOp);
     if(!iterator.hasNext()){
       if(itrOp==ITR_OP_MAP)
-        itrLang_pushValue(vector);
+        itrLang_pushValue([]);
       return;
     }
     if(itrOp==ITR_OP_REDUCE){
@@ -1016,7 +1016,7 @@ function itrLang_applyItrOp(itrOp,code){
     let left=itrLang_toArray(itrLang_popValue());
     let iterator=new ZipItr(left,right);
     if(!iterator.hasNext()){
-      itrLang_pushValue(left);
+      itrLang_pushValue([]);
       return;
     }
     stackStack.push(valueStack);
@@ -1483,7 +1483,7 @@ function itrLang_stepProgram(){
             return itrLang_compareNumbers(x,0n)<0?itrLang_negate(x):x;
           if(x instanceof Matrix)
             return itrLang_determinat(x);
-          throw Error(`unsopported operand for ${String.fromCodePoint(command)}: ${x.constructor.name}`);
+          throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
         };
         itrLang_pushValue(f(a));
       }break;
@@ -1516,7 +1516,7 @@ function itrLang_stepProgram(){
           break;
         }
         //XXX? what is the range of a matrix
-        throw Error(`unsopported operand for ${String.fromCodePoint(command)}: ${a.constructor.name}`);
+        throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
     case ord('¹'):{
         let a=itrLang_popValue();
@@ -1534,7 +1534,7 @@ function itrLang_stepProgram(){
           itrLang_pushValue(r);
           break;
         }
-        throw Error(`unsopported operand for ${String.fromCodePoint(command)}: ${a.constructor.name}`);
+        throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
     case ord('L'):{//length
         let a=itrLang_popValue();
