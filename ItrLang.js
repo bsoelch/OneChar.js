@@ -470,9 +470,9 @@ function itrLang_asArray(x){
 function itrLang_toArray(x){
   if(x instanceof Array)
     return x;
-  if(itrLang_isnumber(x)){
+  if(itrLang_isnumber(x)){//TODO don't explicitly convert number to array
     let l=[];
-    for(let i=1n;i<=x;i++)
+    for(let i=1n;itrLang_compareNumbers(i,x)<=0;i++)
       l.push(i);
     return l;
   }
@@ -808,8 +808,50 @@ const ITR_OP_CAUCHY=5;//Cauchy-product
 const ITR_OP_TIMES=6;//go through all elements of Cartesian product
 const ITR_OP_SUBSET=7;//go through all elements of power set
 
-let itrOp=ITR_OP_NONE;
+//list of all iterator operations
+const iteratorOps=[ord('?'),ord('!'),ord('µ'),ord('R'),ord('M'),ord('×'),ord('Y'),ord('C'),ord('¶')];
+//list of all operators that are allowed as an isolated argument to a iterator operation
+const singleByteIteratorArgs=[
+  ord(' '),ord('$'),ord('£'),ord('¥'),
+  ord('+'),ord('-'),ord('·'),ord('÷'),ord(':'),ord('%'),ord('d'),ord('&'),ord('|'),ord('x'),ord('>'),ord('='),ord('<'),
+  ord('¬'),ord('s'),ord('a'),ord('¿'),ord('~'),ord('¯'),
+  ord('e'),ord('*'),ord('/'),ord('\\'),ord('^'),
+  ord('¡'),ord('°'),ord('L'),ord('º'),ord('¹'),ord('S'),ord('P'),ord('Í'),ord('Ì'),ord('®')
+];
 
+function readItrArgs(ip,argString){
+  let op=readInstruction(ip++);
+  while(iteratorOps.indexOf(op)!=-1){
+    argString.push(op);
+    op=readInstruction(ip++);
+  }
+  if(singleByteIteratorArgs.indexOf(op)!=-1){
+    argString.push(op);
+    return ip;
+  }
+  if(op==ord('"')){
+    argString.push(op);
+    op=readInstruction(ip++);
+    // TODO read string
+    throw Error("unimplemented");
+  }
+  let explicitString=false;
+  if(op==ord('»')){
+    op=readInstruction(ip++);
+    explicitString=true;
+  }
+  let nestingLevel=1;
+  //TODO don't exit code-string literal within string or char literal
+  while(op!=ord('\0')&&(nestingLevel>1||(op!=ord('«')&&(explicitString||op!=ord(';'))))){// « (and ; if argument is implicit string) terminates map argument
+    argString.push(op);
+    if(op=='»')
+      nestingLevel++;
+    if(op=='«')
+      nestingLevel--;
+    op=readInstruction(ip++);
+  }
+  return ip-(op==ord(';')?1n:0n);
+}
 class ForEachLoop{
   constructor(vector,opType=ITR_OP_MAP){
     this.vector=vector;
@@ -840,9 +882,10 @@ class SubsetItr{
     this.maxIndex=2n**BigInt(vector.length);
   }
 }
-function itrLang_applyItrOp(code){
+function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_NONE)
     return;
+  //TODO don't explicitly convert to array if iterator argument is a number
   if(itrOp==ITR_OP_MAP||itrOp==ITR_OP_REDUCE||itrOp==ITR_OP_FLAT_MAP){
     let vector=itrLang_toArray(itrLang_popValue());
     if(vector.length==0){
@@ -868,8 +911,7 @@ function itrLang_applyItrOp(code){
     callStackPush(sourceCode);
     callStackPush(loop);
     sourceCode=code;
-    ip=0;
-    itrOp=ITR_OP_NONE;
+    ip=0n;
     return;
   }
   if(itrOp==ITR_OP_ZIP){
@@ -886,8 +928,7 @@ function itrLang_applyItrOp(code){
     callStackPush(sourceCode);
     callStackPush(loop);
     sourceCode=code;
-    ip=0;
-    itrOp=ITR_OP_NONE;
+    ip=0n;
     return;
   }
   if(itrOp==ITR_OP_CAUCHY){
@@ -905,8 +946,7 @@ function itrLang_applyItrOp(code){
     callStackPush(sourceCode);
     callStackPush(loop);
     sourceCode=code;
-    ip=0;
-    itrOp=ITR_OP_NONE;
+    ip=0n;
     return;
   }
   if(itrOp==ITR_OP_TIMES){
@@ -923,8 +963,7 @@ function itrLang_applyItrOp(code){
     callStackPush(sourceCode);
     callStackPush(loop);
     sourceCode=code;
-    ip=0;
-    itrOp=ITR_OP_NONE;
+    ip=0n;
     return;
   }
   if(itrOp==ITR_OP_SUBSET){
@@ -940,8 +979,7 @@ function itrLang_applyItrOp(code){
     callStackPush(sourceCode);
     callStackPush(loop);
     sourceCode=code;
-    ip=0;
-    itrOp=ITR_OP_NONE;
+    ip=0n;
     return;
   }
   throw Error(`unknown itr-operation ${itrOp}`);
@@ -949,12 +987,11 @@ function itrLang_applyItrOp(code){
 
 function itrLang_finishedSubroutine(){
   numberMode=false;
-  itrOp=ITR_OP_NONE;
   if(!callStackEmpty() && callStackPeek() instanceof ForEachLoop){
     let loop=callStackPeek();
     if(loop.index<loop.vector.length){
       itrLang_pushValue(loop.vector[loop.index++]);
-      ip=0;
+      ip=0n;
       return;
     }
     callStackPop();
@@ -973,7 +1010,7 @@ function itrLang_finishedSubroutine(){
       itrLang_pushValue(loop.left.length>loop.index?loop.left[loop.index]:0);
       itrLang_pushValue(loop.right.length>loop.index?loop.right[loop.index]:0);
       loop.index++;
-      ip=0;
+      ip=0n;
       return;
     }
     callStackPop();
@@ -997,7 +1034,7 @@ function itrLang_finishedSubroutine(){
       itrLang_pushValue(iterator.left[iterator.leftIndex]);
       itrLang_pushValue(iterator.right[iterator.sum-iterator.leftIndex]);
       iterator.leftIndex++;
-      ip=0;
+      ip=0n;
       return;
     }
     callStackPop();
@@ -1030,7 +1067,7 @@ function itrLang_finishedSubroutine(){
       }
       itrLang_pushValue(subset);
       iterator.index++;
-      ip=0;
+      ip=0n;
       return;
     }
     callStackPop();
@@ -1185,14 +1222,7 @@ function itrLang_stepProgram(){
   if(command==ord('\'')){
     command=readInstruction(ip++);
     let char=[...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c));
-    if(itrOp==ITR_OP_MAP){
-      let v=itrLang_toArray(itrLang_popValue());
-      v=v.map(x=>char);
-      itrLang_pushValue(v);
-      itrOp=ITR_OP_NONE;
-    }else{
-      itrLang_pushValue(char);//push char as string (converted to UTF-8)
-    }
+    itrLang_pushValue(char);//push char as string (converted to UTF-8)
     return;
   }
   if(command>=ord('0')&&command<=ord('9')){
@@ -1204,13 +1234,6 @@ function itrLang_stepProgram(){
       numberMode=true;
     }
     command=readInstruction(ip);
-    if((itrOp==ITR_OP_MAP)&&(command<ord('0')||command>ord('9'))){// µ followed by number
-      let n=itrLang_popValue();
-      let v=itrLang_toArray(itrLang_popValue());
-      v=v.map(x=>n);
-      itrLang_pushValue(v);
-      itrOp=ITR_OP_NONE;
-    }
     return;
   }
   numberMode=false;
@@ -1228,10 +1251,6 @@ function itrLang_stepProgram(){
       }
     }
     str=itrLang_parseString(str);
-    if(itrOp!=ITR_OP_NONE){
-      itrLang_applyItrOp(itrLang_decodeUTF8(str.map(c=>Number(c))));
-      return;
-    }
     itrLang_pushValue(str);
     return;
   }
@@ -1242,22 +1261,14 @@ function itrLang_stepProgram(){
       command=readInstruction(ip++);
       if(command==ord('«')){
         level--;
-        if(level==0)
+        if(level==0)//TODO don't exit code-string literal within string or char literal
           break;
       }else if(command==ord('»')){
         level++;
       }
       str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
     }
-    if(itrOp!=ITR_OP_NONE){
-      itrLang_applyItrOp(itrLang_decodeUTF8(str.map(c=>Number(c))));
-      return;
-    }
     itrLang_pushValue(str);
-    return;
-  }
-  if(itrOp!=ITR_OP_NONE){
-    itrLang_applyItrOp([command]);
     return;
   }
   switch(command){
@@ -1267,7 +1278,7 @@ function itrLang_stepProgram(){
     case ord(' '):case ord('\t'):case ord('\n'):case ord('\r')://ignore spaces
       break;
     //comments
-    case ord(';')://XXX? use « for comments
+    case ord(';'):
       while(ip++<sourceCode.length){
         if(readInstruction(ip)==ord('\n'))
           break;
@@ -1302,9 +1313,9 @@ function itrLang_stepProgram(){
     case ord('©'):
       callStackPush(ip);
       callStackPush(sourceCode);
-      sourceCode=itrLang_toArray(itrLang_popValue());
+      sourceCode=itrLang_toArray(itrLang_popValue());//TODO don't convert number to array
       sourceCode=itrLang_decodeUTF8(sourceCode.map(c=>Number(c)));//get string code-points
-      ip=0;
+      ip=0n;
       break;
     // stack operations
     case ord('ä'):{//dup
@@ -1555,36 +1566,62 @@ function itrLang_stepProgram(){
     case ord('!')://for-all
       throw new Error("unimplemented");
       break;
-    case ord('µ'):{//map TODO handle chained iterator-operations  µµ -> use map on all sub-lists
-        itrOp=ITR_OP_MAP;
+    case ord('µ'):{//map
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_MAP,l);
         return;//unfinished operation
       }
     case ord('R'):{//reduce
-        itrOp=ITR_OP_REDUCE;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_REDUCE,l);
         return;//unfinished operation
       }
     case ord('M'):{//flat-map
-        itrOp=ITR_OP_FLAT_MAP;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_FLAT_MAP,l);
         return;//unfinished operation
       }
     case ord('×'):{//Cartesian product
-        itrOp=ITR_OP_TIMES;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_TIMES,l);
         return;//unfinished operation
       }
     case ord('Y'):{//zip
-        itrOp=ITR_OP_ZIP;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_ZIP,l);
         return;//unfinished operation
       }
     case ord('C'):{//cauchy-product
-        itrOp=ITR_OP_CAUCHY;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_CAUCHY,l);
         return;//unfinished operation
       }
     case ord('¶'):{// power set
-        itrOp=ITR_OP_SUBSET;
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_SUBSET,l);
         return;//unfinished operation
       }break;
     case ord('S'):{// sum
-        let v=itrLang_toArray(itrLang_popValue());
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){//skip conversion of number to array and calculate result directly
+          //number is treated as if it were the 1-based range starting at that number
+          //XXX? handle complex numbers
+          if(itrLang_compareNumbers(v,0n)<=0){
+            itrLang_pushValue(0n);
+            return;
+          }
+          v=itrLang_asInt(v);
+          itrLang_pushValue((v*(v+1n))/2n);
+          return;
+        }
+        v=itrLang_toArray(v);
         let f=(v)=>{
           let res=0n;
           v.forEach(e=>{res=itrLang_add(res,e instanceof Array?f(e):e);});
@@ -1593,7 +1630,17 @@ function itrLang_stepProgram(){
         itrLang_pushValue(f(v));
       }break;
     case ord('P'):{// product
-        let v=itrLang_toArray(itrLang_popValue());
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){//skip conversion of number to array and calculate result directly
+          //number is treated as if it were the 1-based range starting at that number
+          //XXX? handle complex numbers
+          let P=1n;
+          for(let i=1n;itrLang_compareNumbers(i,v)<=0;i++)
+            P*=i;
+          itrLang_pushValue(P);
+          return;
+        }
+        v=itrLang_toArray(v);
         let f=(v)=>{
           let res=1n;
           v.forEach(e=>{res=itrLang_multiply(res,e instanceof Array?f(e):e);});
@@ -1618,7 +1665,16 @@ function itrLang_stepProgram(){
       }break;
     case ord('@'):{//replace number with corresponding element of vector
         let I=itrLang_popValue();
-        let v=itrLang_toArray(itrLang_popValue());
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){//calculate result directly if v already is a number
+          let f=(e)=>{//number is treated as if it were the 1-based range starting at that number
+            e=itrLang_asInt(e);
+            return e>=0&&itrLang_compareNumbers(e,v)<0?(e+1n):0n;
+          }
+          itrLang_pushValue(itrLang_unaryNumberOp(I,f));
+          return;
+        }
+        v=itrLang_toArray(v);
         let f=(e)=>{
           e=itrLang_asInt(e);
           return e>=0&&e<v.length?v[e]:0n;
