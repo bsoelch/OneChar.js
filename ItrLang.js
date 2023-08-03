@@ -467,14 +467,23 @@ function itrLang_asArray(x){
     return x;
   return [x];
 }
-function itrLang_toArray(x){
+
+function create_numberRange(n){//create proxy that makes number look like 1 based-range as Array
+  return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
+      if(index==="length")
+        return ;
+      index=Number(index);
+      if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
+        return 0n;
+      return BigInt(index)+1n;
+    }
+  };
+}
+function itrLang_toArray(x,numberToRange=true){
   if(x instanceof Array)
     return x;
-  if(itrLang_isnumber(x)){//TODO don't explicitly convert number to array
-    let l=[];
-    for(let i=1n;itrLang_compareNumbers(i,x)<=0;i++)
-      l.push(i);
-    return l;
+  if(itrLang_isnumber(x)){
+    return create_numberRange(x);
   }
   if(x instanceof Matrix){
     return x.rows;
@@ -852,64 +861,152 @@ function readItrArgs(ip,argString){
   }
   return ip-(op==ord(';')?1n:0n);
 }
-class ForEachLoop{
+
+class ItrLang_Iterator{
+  constructor(){}
+  prepareNext(){}
+}
+class ForEachItr extends ItrLang_Iterator{
   constructor(vector,opType=ITR_OP_MAP){
+    super();
     this.vector=vector;
-    this.unwrap=(opType==ITR_OP_REDUCE||opType==ITR_OP_FLAT_MAP);
-    this.index=(opType==ITR_OP_REDUCE)?2:1;
+    this.unwraped=(opType==ITR_OP_REDUCE||opType==ITR_OP_FLAT_MAP);
+    this.index=0;
+  }
+  hasNext(){
+    return this.index<this.vector.length;
+  }
+  pushNext(){
+    itrLang_pushValue(this.vector.at(this.index++));
+  }
+  onEnd(){
+    if(this.unwraped)
+      return;
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
   }
 }
-class ZipLoop{
+class ZipItr extends ItrLang_Iterator{
   constructor(left,right){
+    super();
     this.left=left;
     this.right=right;
-    this.index=1;
+    this.index=0;
+  }
+  hasNext(){
+    return this.index<this.left.length||this.index<this.right.length;
+  }
+  pushNext(){
+    itrLang_pushValue(this.index<this.left.length?this.left.at(this.index):0n);
+    itrLang_pushValue(this.index<this.right.length?this.right.at(this.index):0n);
+    this.index++;
+  }
+  onEnd(){
+    // do nothing
   }
 }
-class CauchyItr{
-  constructor(left,right,flat=false){
+class CauchyItr extends ItrLang_Iterator{
+  constructor(left,right,wrapLevels=true){
+    super();
     this.left=left;
     this.right=right;
-    this.flat=flat;
+    this.wrapLevels=wrapLevels;
     this.sum=0;
-    this.leftIndex=1;
+    this.leftIndex=0;
+    if(this.left.length==0||this.right.length==0)
+      this.sum=this.left.length+this.right.length;//prevent looping
+  }
+  prepareNext(){
+    if(this.leftIndex>this.sum||this.leftIndex>=this.left.length){
+      this.sum++;
+      this.leftIndex=Math.max(0,this.sum-this.right.length+1);
+      if(this.wrapLevels){
+        let slots=itrLang_popStack();
+        slots.push(valueStack);
+        stackStack.push(slots);
+        valueStack=[];
+      }
+    }
+  }
+  hasNext(){
+    return this.sum<this.left.length+this.right.length-1;
+  }
+  pushNext(){
+    itrLang_pushValue(this.left.at(this.leftIndex));
+    itrLang_pushValue(this.right.at(this.sum-this.leftIndex));
+    this.leftIndex++;
+  }
+  onEnd(){
+    if(this.wrapLevels&&valueStack.length>0){ //TODO check if this code is reachable
+      console.log("unreachable?");
+      let slots=itrLang_popStack();
+      slots.push(valueStack);
+      stackStack.push(slots);
+    }
+    if(this.wrapLevels)
+      valueStack=itrLang_popStack();
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
   }
 }
-class SubsetItr{
+class SubsetItr extends ItrLang_Iterator{
   constructor(vector){
+    super();
     this.vector=vector;
-    this.index=1n;
+    this.index=0n;
     this.maxIndex=2n**BigInt(vector.length);
+  }
+  hasNext(){
+    return this.index<this.maxIndex;
+  }
+  pushNext(){
+    let b=1n,i=0;
+    let subset=[];
+    while(b<this.maxIndex){
+      if(b&this.index){
+        subset.push(this.vector.at(i));
+      }
+      i++;
+      b<<=1n;
+    }
+    itrLang_pushValue(subset);
+    this.index++;
+  }
+  onEnd(){
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
   }
 }
 function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_NONE)
     return;
-  //TODO don't explicitly convert to array if iterator argument is a number
   if(itrOp==ITR_OP_MAP||itrOp==ITR_OP_REDUCE||itrOp==ITR_OP_FLAT_MAP){
     let vector=itrLang_toArray(itrLang_popValue());
-    if(vector.length==0){
+    let iterator=new ForEachItr(vector,itrOp);
+    if(!iterator.hasNext()){
       if(itrOp==ITR_OP_MAP)
         itrLang_pushValue(vector);
       return;
     }
-    let loop=new ForEachLoop(vector,itrOp);
     if(itrOp==ITR_OP_REDUCE){
-      if(vector.length==1){
-        itrLang_pushValue(vector[0]);
+      iterator.pushNext();
+      if(!iterator.hasNext()){
         return;
       }
-      itrLang_pushValue(vector[0]);
-      itrLang_pushValue(vector[1]);
+      iterator.pushNext();
     }else if(itrOp==ITR_OP_FLAT_MAP){
-      itrLang_pushValue(vector[0]);
+      iterator.pushNext();
     }else{
       stackStack.push(valueStack);
-      valueStack=[vector[0]];
+      valueStack=[];
+      iterator.pushNext();
     }
     callStackPush(ip);
     callStackPush(sourceCode);
-    callStackPush(loop);
+    callStackPush(iterator);
     sourceCode=code;
     ip=0n;
     return;
@@ -917,16 +1014,17 @@ function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_ZIP){
     let right=itrLang_toArray(itrLang_popValue());
     let left=itrLang_toArray(itrLang_popValue());
-    if(left.length==0&&right.length==0){
+    let iterator=new ZipItr(left,right);
+    if(!iterator.hasNext()){
       itrLang_pushValue(left);
       return;
     }
-    let loop=new ZipLoop(left,right);
     stackStack.push(valueStack);
-    valueStack=[left.length>0?left[0]:0,right.length>0?right[0]:0];
+    valueStack=[];
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
-    callStackPush(loop);
+    callStackPush(iterator);
     sourceCode=code;
     ip=0n;
     return;
@@ -934,17 +1032,18 @@ function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_CAUCHY){
     let right=itrLang_toArray(itrLang_popValue());
     let left=itrLang_toArray(itrLang_popValue());
-    if(left.length==0||right.length==0){
-      itrLang_pushValue(left);
+    let iterator=new CauchyItr(left,right,true);
+    if(!iterator.hasNext()){
+      itrLang_pushValue([]);
       return;
     }
-    let loop=new CauchyItr(left,right,false);
     stackStack.push(valueStack);
     stackStack.push([]);
-    valueStack=[left[0],right[0]];
+    valueStack=[];
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
-    callStackPush(loop);
+    callStackPush(iterator);
     sourceCode=code;
     ip=0n;
     return;
@@ -952,32 +1051,30 @@ function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_TIMES){
     let right=itrLang_toArray(itrLang_popValue());
     let left=itrLang_toArray(itrLang_popValue());
-    if(left.length==0||right.length==0){
-      itrLang_pushValue(left);
+    let iterator=new CauchyItr(left,right,false);
+    if(!iterator.hasNext()){
+      itrLang_pushValue([]);
       return;
     }
-    let loop=new CauchyItr(left,right,true);
     stackStack.push(valueStack);
-    valueStack=[left[0],right[0]];
+    valueStack=[];
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
-    callStackPush(loop);
+    callStackPush(iterator);
     sourceCode=code;
     ip=0n;
     return;
   }
   if(itrOp==ITR_OP_SUBSET){
     let vector=itrLang_toArray(itrLang_popValue());
-    if(vector.length==0){
-      itrLang_pushValue([[]]);
-      return;
-    }
-    let loop=new SubsetItr(vector);
+    let iterator=new SubsetItr(vector);
     stackStack.push(valueStack);
-    valueStack=[[]];
+    valueStack=[];
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
-    callStackPush(loop);
+    callStackPush(iterator);
     sourceCode=code;
     ip=0n;
     return;
@@ -987,95 +1084,18 @@ function itrLang_applyItrOp(itrOp,code){
 
 function itrLang_finishedSubroutine(){
   numberMode=false;
-  if(!callStackEmpty() && callStackPeek() instanceof ForEachLoop){
-    let loop=callStackPeek();
-    if(loop.index<loop.vector.length){
-      itrLang_pushValue(loop.vector[loop.index++]);
-      ip=0n;
-      return;
-    }
-    callStackPop();
-    sourceCode=callStackPop();
-    ip=callStackPop();
-    if(!loop.unwrap){
-      let oldStack=itrLang_popStack();
-      oldStack.push(valueStack);
-      valueStack=oldStack;
-    }
-    return;
-  }
-  if(!callStackEmpty() && callStackPeek() instanceof ZipLoop){
-    let loop=callStackPeek();
-    if(loop.index<loop.left.length&&loop.index<loop.right.length){
-      itrLang_pushValue(loop.left.length>loop.index?loop.left[loop.index]:0);
-      itrLang_pushValue(loop.right.length>loop.index?loop.right[loop.index]:0);
-      loop.index++;
-      ip=0n;
-      return;
-    }
-    callStackPop();
-    sourceCode=callStackPop();
-    ip=callStackPop();
-    return;
-  }
-  if(!callStackEmpty() && callStackPeek() instanceof CauchyItr){
+  if(!callStackEmpty() && callStackPeek() instanceof ItrLang_Iterator){
     let iterator=callStackPeek();
-    if(iterator.leftIndex>iterator.sum||iterator.leftIndex>=iterator.left.length){
-      iterator.sum++;
-      iterator.leftIndex=Math.max(0,iterator.sum-iterator.right.length+1);
-      let slots=itrLang_popStack();
-      if(!iterator.flat){
-        slots.push(valueStack);
-        stackStack.push(slots);
-        valueStack=[];
-      }
-    }
-    if(iterator.sum<iterator.left.length+iterator.right.length-1){
-      itrLang_pushValue(iterator.left[iterator.leftIndex]);
-      itrLang_pushValue(iterator.right[iterator.sum-iterator.leftIndex]);
-      iterator.leftIndex++;
+    iterator.prepareNext();
+    if(iterator.hasNext()){
+      iterator.pushNext();
       ip=0n;
       return;
     }
     callStackPop();
     sourceCode=callStackPop();
     ip=callStackPop();
-    if(!iterator.flat&&valueStack.length>0){ //TODO check if this code is reachable
-      console.log("unreachable?");
-      let slots=itrLang_popStack();
-      slots.push(valueStack);
-      stackStack.push(slots);
-    }
-    if(!iterator.flat)
-      valueStack=itrLang_popStack();
-    let oldStack=itrLang_popStack();
-    oldStack.push(valueStack);
-    valueStack=oldStack;
-    return;
-  }
-  if(!callStackEmpty() && callStackPeek() instanceof SubsetItr){
-    let iterator=callStackPeek();
-    if(iterator.index<iterator.maxIndex){
-      let b=1n,i=0;
-      let subset=[];
-      while(b<iterator.maxIndex){
-        if(b&iterator.index){
-          subset.push(iterator.vector[i]);
-        }
-        i++;
-        b<<=1n;
-      }
-      itrLang_pushValue(subset);
-      iterator.index++;
-      ip=0n;
-      return;
-    }
-    callStackPop();
-    sourceCode=callStackPop();
-    ip=callStackPop();
-    let oldStack=itrLang_popStack();
-    oldStack.push(valueStack);
-    valueStack=oldStack;
+    iterator.onEnd();
     return;
   }
   if(!callStackEmpty() && callStackPeek() instanceof Array){
@@ -1313,7 +1333,7 @@ function itrLang_stepProgram(){
     case ord('©'):
       callStackPush(ip);
       callStackPush(sourceCode);
-      sourceCode=itrLang_toArray(itrLang_popValue());//TODO don't convert number to array
+      sourceCode=itrLang_toArray(itrLang_popValue(),false);
       sourceCode=itrLang_decodeUTF8(sourceCode.map(c=>Number(c)));//get string code-points
       ip=0n;
       break;
