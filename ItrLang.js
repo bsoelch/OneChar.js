@@ -661,7 +661,7 @@ function itrLang_invert(a){
 }
 function itrLang_realDivide(a,b){
   numberDivide=(x,y)=>{
-    if(a==0||b==0)// set 0/0 to 0
+    if(x==0||y==0)// set 0/0 to 0
       return 0n;
     if(itrLang_isint(x) && itrLang_isint(y))
       return new Fraction(x,y);
@@ -677,7 +677,7 @@ function itrLang_realDivide(a,b){
 }
 function itrLang_intDivide(a,b){
   numberDivide=(x,y)=>{
-    if(a==0||b==0)// set 0/0 to 0
+    if(x==0||y==0)// set 0/0 to 0
       return 0n;
     if(itrLang_isint(x) && itrLang_isint(y))
       return x/y;
@@ -693,8 +693,8 @@ function itrLang_intDivide(a,b){
 }
 function itrLang_remainder(a,b){
   numberRemainder=(x,y)=>{
-    if(a==0||b==0)// set a%0 to a
-      return a;
+    if(x==0||y==0)// set a%0 to a
+      return x;
     if(itrLang_isint(x) && itrLang_isint(y))
       return x%y;
     if(itrLang_isrational(x) && itrLang_isrational(y)){
@@ -752,7 +752,7 @@ function itrLang_multiply(a,b){
 }
 function itrLang_divide(a,b,ldiv){
   if(itrLang_isnumber(a)||itrLang_isnumber(b)){
-    return itrLang_realDivide(a,b);
+    return ldiv?itrLang_realDivide(b,a):itrLang_realDivide(a,b);
   }
   if(a instanceof Matrix&&b instanceof Matrix){
     if(ldiv){
