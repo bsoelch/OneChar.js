@@ -1537,7 +1537,7 @@ function itrLang_stepProgram(){
         throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
     case ord('L'):{//length
-        let a=itrLang_popValue();
+        let a=itrLang_peekValue();
         if(a instanceof Array)
           itrLang_pushValue(BigInt(a.length));
         else if(a instanceof Matrix)
