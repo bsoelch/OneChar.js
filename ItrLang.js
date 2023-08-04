@@ -854,15 +854,31 @@ function readItrArgs(ip,argString){
     argString.push(op);
     op=readInstruction(ip++);
   }
-  if(singleByteIteratorArgs.indexOf(op)!=-1){
+  if(overwrites.has(op)){
+    let o=overwrites.get(op);
+    if(o.isAutoCall){
+      argString.push(op);
+      return ip;
+    }
+  }else if(singleByteIteratorArgs.indexOf(op)!=-1){
     argString.push(op);
+    if(op==ord('L')){//pop argument when mapping with length
+      argString.push(ord('à'));
+      argString.push(ord('å'));
+    }
     return ip;
   }
   if(op==ord('"')){
-    argString.push(op);
     op=readInstruction(ip++);
-    // TODO read string
-    throw Error("unimplemented");
+    while(op!=ord('\0')&&op!=ord('"')){
+      argString.push(op);
+      if(op==ord('\\')){
+        op=readInstruction(ip++);
+        argString.push(op);
+      }
+      op=readInstruction(ip++);
+    }
+    return ip;
   }
   let explicitString=false;
   if(op==ord('»')){
@@ -870,12 +886,30 @@ function readItrArgs(ip,argString){
     explicitString=true;
   }
   let nestingLevel=1;
-  //TODO don't exit code-string literal within string or char literal
-  while(op!=ord('\0')&&(nestingLevel>1||(op!=ord('«')&&(explicitString||op!=ord(';'))))){// « (and ; if argument is implicit string) terminates map argument
+  let inString=false;
+  while(op!=ord('\0')&&(nestingLevel>1||inString||(op!=ord('«')&&(explicitString||op!=ord(';'))))){// « (and ; if argument is implicit string) terminates map argument
     argString.push(op);
-    if(op=='»')
+    if(inString){
+      if(op==ord('"'))
+        inString=false;
+      if(op==ord('\\')){
+        op=readInstruction(ip++);
+        argString.push(op);
+        op=readInstruction(ip++);
+        continue;
+      }
+    }
+    if(op==ord('\'')){
+      op=readInstruction(ip++);
+      argString.push(op);
+      op=readInstruction(ip++);
+      continue;
+    }
+    if(op==ord('"'))
+      inString=true;
+    if(op==ord('»'))
       nestingLevel++;
-    if(op=='«')
+    if(op==ord('«'))
       nestingLevel--;
     op=readInstruction(ip++);
   }
