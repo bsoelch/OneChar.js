@@ -1661,7 +1661,7 @@ function itrLang_stepProgram(){
       }break;
     // vector operations
     case ord('¡'):{
-        let a=itrLang_asArray(itrLang_popValue());
+        let a=itrLang_toArray(itrLang_popValue(),false);
         itrLang_pushValue(a.toReversed());
       }break;
     case ord('°'):{
