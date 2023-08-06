@@ -1290,15 +1290,6 @@ function itrLang_stepProgram(){
     itrLang_finishedSubroutine();
     return;//reached end of program
   }
-  if(comment){
-    if(command==ord('\n'))
-      comment=false;
-    return;
-  }
-  if(skipCount>0){
-    //TODO skip block
-    return;
-  }
   if(command==ord('\'')){
     command=readInstruction(ip++);
     let char=[...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c));
