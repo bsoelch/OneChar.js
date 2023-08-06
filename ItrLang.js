@@ -139,7 +139,7 @@ function itrLang_gaussElim(A,B=undefined,complete){
   }
 }
 
-function itrLang_determinat(A){
+function itrLang_determinant(A){
   A=A.copy();
   itrLang_gaussElim(A);
   let det=1n;
@@ -1571,7 +1571,7 @@ function itrLang_stepProgram(){
           if(itrLang_isnumber(x))
             return itrLang_compareNumbers(x,0n)<0?itrLang_negate(x):x;
           if(x instanceof Matrix)
-            return itrLang_determinat(x);
+            return itrLang_determinant(x);
           throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
         };
         itrLang_pushValue(f(a));
