@@ -1102,7 +1102,7 @@ function itrLang_applyItrOp(itrOp,code){
     ip=0n;
     return;
   }
-  if(itrOp==ITR_OP_TIMES){
+  if(itrOp==ITR_OP_TIMES){//XXX? iterate Cartesian product row by row instead of diagonally
     let right=itrLang_toArray(itrLang_popValue());
     let left=itrLang_toArray(itrLang_popValue());
     let iterator=new CauchyItr(left,right,false);
@@ -1581,7 +1581,7 @@ function itrLang_stepProgram(){
             return itrLang_compareNumbers(x,0n)<0?itrLang_negate(x):x;
           if(x instanceof Matrix)
             return itrLang_determinat(x);
-          throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
+          throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
         };
         itrLang_pushValue(f(a));
       }break;
@@ -1614,7 +1614,7 @@ function itrLang_stepProgram(){
           break;
         }
         //XXX? what is the range of a matrix
-        throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
+        throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
     case ord('¹'):{
         let a=itrLang_popValue();
@@ -1632,7 +1632,7 @@ function itrLang_stepProgram(){
           itrLang_pushValue(r);
           break;
         }
-        throw Error(`unsopported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
+        throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
     case ord('L'):{//length
         let a=itrLang_peekValue();
