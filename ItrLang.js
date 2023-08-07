@@ -111,27 +111,27 @@ function itrLang_addRow(r,k,l,A,B=undefined){
 // bring A in triangle form, apply same operations to B
 function itrLang_gaussElim(A,B=undefined,complete){
   for(let r=0;r<A.nrows;r++){
-    if(itrLang_compareNumbers(A.at(r,r),0n)==0){
+    if(!itrLang_asBool(A.at(r,r))){
       //find nonzero row, add it onto row r
       for(let k=r+1;k<A.nrows;k++){
-        if(itrLang_compareNumbers(A.at(k,r),0n)!=0){
+        if(itrLang_asBool(A.at(k,r))){
           itrLang_addRow(k,r,1n,A,B);
           break;
         }
       }
     }
     for(let k=r+1;k<A.nrows;k++){
-      if(itrLang_compareNumbers(A.at(k,r),0n)!=0){
+      if(itrLang_asBool(A.at(k,r))){
         itrLang_addRow(r,k,itrLang_negate(itrLang_realDivide(A.at(k,r),A.at(r,r))),A,B);//subtract scaled row from row
       }
     }
   }
   if(complete){
     for(let r=A.nrows-1;r>=0;r--){
-      if(itrLang_compareNumbers(A.at(r,r),0n)==0)
+      if(!itrLang_asBool(A.at(r,r)))
         continue;
       for(let k=0;k<r;k++){
-        if(itrLang_compareNumbers(A.at(k,r),0n)!=0){
+        if(itrLang_asBool(A.at(k,r))){
           itrLang_addRow(r,k,itrLang_negate(itrLang_realDivide(A.at(k,r),A.at(r,r))),A,B);//subtract scaled row from row
         }
       }
@@ -224,6 +224,11 @@ function itrLang_peekValue(val){
     return 0n;
   return valueStack.at(-1);
 }
+function putCodePoint(cp){
+  // TODO handle code-points outside Unicode range
+  bytes=utf8Encode.encode(String.fromCodePoint(Number(cp)));
+  bytes.forEach(b=>putchar(BigInt(b)));
+}
 function itrLang_printValue(val,detectStrings=false,escapeStrings=false){
   if(val instanceof Array){
     if(detectStrings){
@@ -231,13 +236,13 @@ function itrLang_printValue(val,detectStrings=false,escapeStrings=false){
       val.forEach(x=>{
         if(!itrLang_isint(x))
           isString=false;
-        if(x<9||x>0xf4)//character in printable Unicode range
+        if(x<9||x>0x10ffff)//character outside printable Unicode range
           isString=false;
       });
       if(isString){
         if(escapeStrings)
           putchar(ord('"'));
-        val.forEach(c=>{if(escapeStrings&&(c==ord('"')||c==ord('\\')))putchar(ord('\\'));putchar(c);});
+        val.forEach(c=>{if(escapeStrings&&(c==ord('"')||c==ord('\\')))putchar(ord('\\'));putCodePoint(c);});
         if(escapeStrings)
           putchar(ord('"'));
         return;
@@ -402,6 +407,7 @@ function itrLang_readBracket(left,right){
     if(k>0)
       c=getchar();
   }
+  buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
   itrLang_pushValue(itrLang_parseString(buff));
   return;
 }
@@ -423,6 +429,7 @@ function itrLang_readWord(){
       c=getchar();
     }
     buff.push(c);
+    buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
     itrLang_pushValue(itrLang_parseString(buff));
     return;
   }
@@ -441,6 +448,7 @@ function itrLang_readWord(){
   while(c>=0&&!itrLang_isspace(c)){//read until next space
     buff.push(c);c=getchar();
   }
+  buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
   itrLang_pushValue(itrLang_parseString(buff));
 }
 
@@ -1196,6 +1204,7 @@ function itrLang_finishedSubroutine(){
     return;
   }
   running=false;
+  // FIXME no implicit output if program contains output operators
   if(outputEmpty()){//output top stack element
     itrLang_printValue(itrLang_peekValue(),true);
   }
@@ -1314,7 +1323,8 @@ function itrLang_toBytes(){
   return new Uint8Array(bytes);
 }
 
-//TODO add implicit # if code contains no read instructions
+//TODO if no explicit input stack underflow implicitly reads from input (# operation)
+
 //XXX? allow reading input multiple times/ save first ... input elements in variables
 function itrLang_stepProgram(){
   command=readInstruction(ip++);
@@ -1324,21 +1334,20 @@ function itrLang_stepProgram(){
   }
   if(command==ord('\'')){
     command=readInstruction(ip++);
-    let char=[...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c));
-    itrLang_pushValue(char);//push char as string (converted to UTF-8)
+    itrLang_pushValue([command]);//push char as string
     return;
   }
   if(command==ord('"')){
-    let str=[Number(ord('"'))];//position of "
+    let str=[command];//position of "
     while(ip<sourceCode.length){
       command=readInstruction(ip++);
-      str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+      str=str.concat(command);
       if(command==ord('"')){
         break;
       }
       if(command==ord('\\')){
         command=readInstruction(ip++);
-        str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+        str=str.concat(command);
       }
     }
     str=itrLang_parseString(str);
@@ -1357,7 +1366,7 @@ function itrLang_stepProgram(){
       }else if(command==ord('»')){
         level++;
       }
-      str=str.concat([...utf8Encode.encode(String.fromCodePoint(Number(command)))].map(c=>BigInt(c)));
+      str=str.concat(command);
     }
     itrLang_pushValue(str);
     return;
@@ -1514,7 +1523,7 @@ function itrLang_stepProgram(){
       }break;
     case ord('¥'):{// write char(s)
         let s=itrLang_popValue();
-        itrLang_unaryNumberOp(s,c=>putchar(BigInt(c)));
+        itrLang_unaryNumberOp(s,c=>putCodePoint(BigInt(c)));
       }break;
     case ord('£'):{// write value
         itrLang_printValue(itrLang_popValue());
@@ -1589,7 +1598,11 @@ function itrLang_stepProgram(){
       }break;
     case ord('¬'):{
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_compareNumbers(x,0n)==0)));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_asBool(x)?0:1)));
+      }break;
+    case ord('¿'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_asBool(x)?1:0)));
       }break;
     case ord('s'):{//sign
         let a=itrLang_popValue();
@@ -1607,10 +1620,6 @@ function itrLang_stepProgram(){
           throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
         };
         itrLang_pushValue(f(a));
-      }break;
-    case ord('¿'):{
-        let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_compareNumbers(x,0n)!=0)));
       }break;
     case ord('~'):{
         let a=itrLang_popValue();
