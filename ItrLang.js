@@ -1005,6 +1005,38 @@ class CauchyItr extends ItrLang_Iterator{
     valueStack=oldStack;
   }
 }
+class CartesianItr extends ItrLang_Iterator{
+  constructor(left,right,wrapLevels=false){
+    super();
+    this.left=left;
+    this.right=right;
+    this.wrapLevels=wrapLevels;
+    this.leftIndex=0;
+    this.rightIndex=0;
+  }
+  hasNext(){
+    return this.leftIndex<this.left.length&&this.rightIndex<this.right.length;
+  }
+  pushNext(){
+    itrLang_pushValue(this.left.at(this.leftIndex));
+    itrLang_pushValue(this.right.at(this.rightIndex));
+    this.rightIndex++;
+    if(this.rightIndex==this.right.length){
+      this.rightIndex=0;
+      this.leftIndex++;
+    }
+  }
+  onEnd(){
+    if(this.wrapLevels){
+      let slots=itrLang_popStack();
+      slots.push(valueStack);
+      valueStack=slots;
+    }
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
+  }
+}
 class SubsetItr extends ItrLang_Iterator{
   constructor(vector){
     super();
@@ -1105,7 +1137,7 @@ function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_TIMES){//XXX? iterate Cartesian product row by row instead of diagonally
     let right=itrLang_toArray(itrLang_popValue());
     let left=itrLang_toArray(itrLang_popValue());
-    let iterator=new CauchyItr(left,right,false);
+    let iterator=new CartesianItr(left,right,false);
     if(!iterator.hasNext()){
       itrLang_pushValue([]);
       return;
