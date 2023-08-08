@@ -830,10 +830,12 @@ class ItrLang_OpOverwrite{
 function itrLang_overwriteOp(op,value,autoCall){
   if(autoCall){
     value=itrLang_toArray(value,false);
-    value=itrLang_decodeUTF8(value.map(c=>Number(c)));//get string code-points
   }
   let o=new ItrLang_OpOverwrite(op,value,autoCall);
   overwrites.set(op,o);
+}
+function itrLangInit(){
+  overwrites=new Map([]);
 }
 
 const ITR_OP_NONE=0;
@@ -1440,8 +1442,7 @@ function itrLang_stepProgram(){
     case ord('©'):
       callStackPush(ip);
       callStackPush(sourceCode);
-      sourceCode=itrLang_toArray(itrLang_popValue(),false);
-      sourceCode=itrLang_decodeUTF8(sourceCode.map(c=>Number(c)));//get string code-points
+      sourceCode=itrLang_toArray(itrLang_popValue(),false);//get string code-points
       ip=0n;
       break;
     case ord('?'):// ? start if/while statement

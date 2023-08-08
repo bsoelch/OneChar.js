@@ -245,6 +245,8 @@ function initProgram(){
   type=0n;
   maxCallDepth=3
   running=true;
+  if(interpreter=INTERPRETER_ITRLANG)
+    itrLangInit();
 }
 
 function readInstruction(ip){
