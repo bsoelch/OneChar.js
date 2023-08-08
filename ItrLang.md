@@ -30,9 +30,9 @@ Example:
 All Literal simply push the value of their element onto the stack.
 
 * `[0-9]+` (decimal) integer literals
-* `"..."`  Utf-8 strings, support the usual string escaping rules
+* `"..."`  strings literal, support the usual string escaping rules (encoded as UTF-8)
 * `'.`     char literal (will push an one-element string)
-* `»...«`  code-string literal only allow the first 256 Unicode characters (`»` and `«` can be used for nested code-strings)
+* `»...«`  code literal only allows the first 256 Unicode characters (using same encoding as code) (`»` and `«` can be used for nested code-strings)
 * `(...)`  vector literal, the code between `(` and `)` is executed on a separate stack which is the pushed on the main stack as an array
 * `(...,...,...)` matrix literal similar to vector-literals with `,`being used to separate the rows of the matrix (!matrices and nested arrays behave differently under arithmetic operations)
 
@@ -56,7 +56,6 @@ Examples:
 
 * `¥` writes the top stack element as byte (or string if it is a vector) rounding numbers to the nearest integer and taking all values modulo `256` 
 * `£` prints the string representation of the top stack element
-* `$` pushes the string representation of the top-stack element onto the stack
 
 If no operation writes to standard output, the the top stack element will be implicitly printed.
 
@@ -64,6 +63,9 @@ If no operation writes to standard output, the the top stack element will be imp
 
 * `\x00` return from subroutine/exit the program
 * `©`    call the top-stack element as a subroutine (implicitly converts non-array elements to array and decodes UTF-8 strings)
+* `$`    redefine the next symbol to be the top stack value some symbols (`; \n»«"'(,)©?![]`) cannot be redefined
+* `$©`   redefine the next symbol to be the top stack value and be called automatically when used
+
 * `?...[` if-block (unimplemented)
 * `?...]` while-block (unimplemented)
 * `!...[` if-block (unimplemented)
@@ -117,11 +119,24 @@ binary:
 
 * `°` concatenation, numbers and matrices are implicitly warped in a single element array
 * `S` sum up all elements of the top stack element, matrices are implicitly converted to nested arrays and numbers are converted to their one-based range (see `¹` conversion operator)
+* `P` product of all elements of the top stack element, matrices are implicitly converted to nested arrays and numbers are converted to their one-based range
 * `Ì` replace array with an array containing the indices of its non-zero elements, numbers and matrices are implicitly warped in a single element array
 * `Í` replace array with an array that has ones that the positions specified by the argument (rounded to the nearest integer), numbers and matrices are implicitly warped in a single element array
 
+## Iterator operations
+
+unary:
+
 * `µ` map: apply next operation to all elements of the current element converted to a vector
-<!-- TODO describe map operation -->
+* `M` flat map: like map, but pushing the array elements directly on the stack
+* `R` reduce: reduce list with given operation, pushes nothing if list is empty
+* `¶` subsets: iterate through all subsets of the argument
+
+binary:
+* `Y` zip: zip lists combining with the given subroutine
+* `C` Cauchy product: go through diagonals of cross product combining each element pair with the given subroutine
+* `×` cross product:  go through the cross product line by line  combining with the given subroutine
+<!-- TODO describe iterator operations -->
 
 ## Type-conversion
 
