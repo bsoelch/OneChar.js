@@ -860,9 +860,11 @@ const singleByteIteratorArgs=[
 
 function readItrArgs(ip,argString){
   let op=readInstruction(ip++);
+  let isNested=false;
   while(iteratorOps.indexOf(op)!=-1){
     argString.push(op);
     op=readInstruction(ip++);
+    isNested=true;
   }
   if(overwrites.has(op)){
     let o=overwrites.get(op);
@@ -891,11 +893,13 @@ function readItrArgs(ip,argString){
     return ip;
   }
   let explicitString=false;
+  let nestingLevel=1;
   if(op==ord('»')){
     op=readInstruction(ip++);
     explicitString=true;
+    if(isNested)
+      nestingLevel++;
   }
-  let nestingLevel=1;
   let inString=false;
   while(op!=ord('\0')&&(nestingLevel>1||inString||(op!=ord('«')&&(explicitString||op!=ord(';'))))){// « (and ; if argument is implicit string) terminates map argument
     argString.push(op);
