@@ -1232,8 +1232,9 @@ function itrLang_readCodepoint(bytes,offset,out){//extended UTF8 decoder
   }else{
     let cp=0n;
     // use two high bits of bytes in sequence to store high bits of number, if the byte sequence is correct UTF-8, the high bits will be zero
-    cpBytes.slice(1).forEach(b=>{cp<<=2n;cp|=BigInt((b>>6)^0x2)});
+    cpBytes.slice(1).forEach(b=>{cp<<=2n;cp|=BigInt(((b&0xff)>>6)^0x2)});
     // mask out ones at start of high byte
+    cp<<=BigInt(8-cpBytes.length);
     cp|=BigInt(cpBytes[0]&(0xff>>(cpBytes.length)));
     // append remaining bits, according to UTF-8 rules
     cpBytes.slice(1).forEach(b=>{cp<<=6n;cp|=BigInt(b&0x3f)});
@@ -1255,18 +1256,16 @@ function itrLang_loadFromBytes(bytes){
     throw new Error(`expected Uint8Array got ${bytes.constructor.name}`);
   let stringMode=false;
   sourceCode=[];
-  let string=[];
   for(let i=0;i<bytes.length;i++){
     let b=bytes[i];
     if(stringMode){
       if(b==ord('"')){
         sourceCode.push(BigInt(b));//closing "
         stringMode=false;
-        string=[];
         continue;
       }else if(b==ord('\\')){
         sourceCode.push(BigInt(b));
-        b=bytes[++i];
+        b=bytes[++i];// TODO handle index out of bounds
       }
       i=itrLang_readCodepoint(bytes,i,sourceCode);
       i--;//do not increment counter
