@@ -1683,6 +1683,18 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_exp(a));
       }break;
+    case ord('½'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_divide(a,2n));
+      }break;
+    case ord('²'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_multiply(a,a));
+      }break;
+    case ord('³'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_multiply(a,itrLang_multiply(a,a)));
+      }break;
     // matrix operations
     case ord('*'):{
         let b=itrLang_popValue();
