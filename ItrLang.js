@@ -275,7 +275,7 @@ function itrLang_findMatchingBracket(str,i,left,right){
   }
   return i;
 }
-function itrLang_parseString(str){
+function itrLang_parseValue(str){
   if(str.length==0)
     return 0n;
   let buff=[];
@@ -314,15 +314,15 @@ function itrLang_parseString(str){
       let i0=i;
       if(str[i]==ord('[')){
         i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('{')){
         i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('(')){
         i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else if(str[i]==ord('"')){
         while(i++<str.length){
@@ -331,12 +331,12 @@ function itrLang_parseString(str){
           if(str[i]==ord('\\'))
             i++;
         }
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
       }else{
         while(i<str.length&&str[i]!=ord(',')&&str[i]!=ord(']')&&str[i]!=ord('}'))i++;
         if(i0!=i||(str[i]!=ord(']')&&str[i]!=ord('}')))
-          buff.push(itrLang_parseString(str.slice(i0,i)));
+          buff.push(itrLang_parseValue(str.slice(i0,i)));
       }
       if(str[i]==ord(']')||str[i]==ord('}'))
         break;
@@ -351,13 +351,13 @@ function itrLang_parseString(str){
       let i0=i;
       if(str[i]==ord('[')){
         i=itrLang_findMatchingBracket(str,i,ord('['),ord(']'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
       }else if(str[i]==ord('{')){
         i=itrLang_findMatchingBracket(str,i,ord('{'),ord('}'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
       }else if(str[i]==ord('(')){
         i=itrLang_findMatchingBracket(str,i,ord('('),ord(')'));
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
       }else if(str[i]==ord('"')){
         while(i++<str.length){
           if(str[i]==ord('"'))
@@ -365,11 +365,11 @@ function itrLang_parseString(str){
           if(str[i]==ord('\\'))
             i++;
         }
-        buff.push(itrLang_parseString(str.slice(i0,i)));
+        buff.push(itrLang_parseValue(str.slice(i0,i)));
       }else{
         while(i<str.length&&!itrLang_isspace(str[i])&&str[i]!=ord(',')&&str[i]!=ord('(')&&str[i]!=ord(')'))i++;
         if(i0!=i||(str[i]!=ord(')')))
-          buff.push(itrLang_parseString(str.slice(i0,i)));
+          buff.push(itrLang_parseValue(str.slice(i0,i)));
       }
       if(str[i]==ord(')'))
         break;
@@ -414,7 +414,7 @@ function itrLang_readBracket(left,right){
       c=getchar();
   }
   buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
-  itrLang_pushValue(itrLang_parseString(buff));
+  itrLang_pushValue(itrLang_parseValue(buff));
 }
 function itrLang_readValue(){
   let c=getchar();
@@ -436,7 +436,7 @@ function itrLang_readValue(){
       c=getchar();
     }
     buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
-    itrLang_pushValue(itrLang_parseString(buff));
+    itrLang_pushValue(itrLang_parseValue(buff));
     return;
   }
   if(c==ord('[')){
@@ -455,7 +455,7 @@ function itrLang_readValue(){
     buff.push(c);c=getchar();
   }
   buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
-  itrLang_pushValue(buff);
+  itrLang_pushValue(itrLang_parseValue(buff));
 }
 
 function itrLang_isint(x){
@@ -1361,7 +1361,7 @@ function itrLang_stepProgram(){
         str=str.concat(command);
       }
     }
-    str=itrLang_parseString(str);
+    str=itrLang_parseValue(str);
     itrLang_pushValue(str);
     return;
   }
