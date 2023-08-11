@@ -276,10 +276,16 @@ function itrLang_findMatchingBracket(str,i,left,right){
   return i;
 }
 function itrLang_parseString(str){
+  if(str.length==0)
+    return 0n;
   let buff=[];
   if(str[0]==ord('"')){
     for(let i=1;i<str.length;i++){//read until next "
       if(str[i]==ord('\\')){//escape sequences
+        if(i+1==str.length){
+            buff.push(ord('\\'));
+            continue;
+        }
         switch(str[++i]){
           case ord('t'):
             buff.push(ord('\t'));
@@ -409,9 +415,8 @@ function itrLang_readBracket(left,right){
   }
   buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
   itrLang_pushValue(itrLang_parseString(buff));
-  return;
 }
-function itrLang_readWord(){
+function itrLang_readValue(){
   let c=getchar();
   let buff=[];
   while(itrLang_isspace(c))c=getchar();//skip spaces
@@ -419,8 +424,10 @@ function itrLang_readWord(){
     buff.push(c);
     c=getchar();
     while(c>=0){
-      if(c==ord('"'))
+      if(c==ord('"')){
+        buff.push(c);
         break;
+      }
       if(c==ord('\\')){
         buff.push(c);
         c=getchar();
@@ -428,7 +435,6 @@ function itrLang_readWord(){
       buff.push(c);
       c=getchar();
     }
-    buff.push(c);
     buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
     itrLang_pushValue(itrLang_parseString(buff));
     return;
@@ -449,7 +455,7 @@ function itrLang_readWord(){
     buff.push(c);c=getchar();
   }
   buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
-  itrLang_pushValue(itrLang_parseString(buff));
+  itrLang_pushValue(buff);
 }
 
 function itrLang_isint(x){
@@ -1502,11 +1508,11 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
       }break;
     // IO
-    case ord('_'):{// read char
+    case ord('_'):{// read byte
         itrLang_pushValue(getchar());
       }break;
-    case ord('#'):{// parse word
-        itrLang_readWord();
+    case ord('#'):{// parse value
+        itrLang_readValue();
       }break;
     // XXX read single line, read word
     case ord('§'):{// read "paragraph" (read all characters until first empty line)
@@ -1523,6 +1529,8 @@ function itrLang_stepProgram(){
           buff.push(c);
           c=getchar();
         }
+        // decode UTF-8
+        buff=itrLang_decodeUTF8(buff.map(c=>Number(c)));
         itrLang_pushValue(buff);
       }break;
     case ord('¥'):{// write char(s)
