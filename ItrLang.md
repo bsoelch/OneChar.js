@@ -2,7 +2,9 @@
 
 _Itr_ is an Array-based programming Language designed for code golfing.
 
-_Itr_ has built-in support for unbounded Integers, Matrix operations as well as Rational <i>and Complex number</i> (not yet implemented).
+_Itr_ has built-in support for unbounded Integers, Matrix operations as well as Rational <i>and Complex number</i>.
+
+[main implementation](https://github.com/bsoelch/ItrLang)
 
 ## Character Encoding
 
