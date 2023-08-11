@@ -265,6 +265,104 @@ function itrLang_isdigit(c){
   return c>=ord('0')&&c<=ord('9');
 }
 
+function itrLang_tryParseNumber(str){
+  let expr=[],current="";
+  let base=10;
+  for(let i=0;i<str.length;i++){ // TODO support floats
+    let c=str[i];
+    if(c>=ord('0')&&(c<=ord('0')+BigInt(Math.min(base-1,9)))){
+      current+=String.fromCodePoint(Number(c));
+      continue;
+    }
+    if(base==16&&((c>=ord('A')&&c<=ord('F'))||(c>=ord('a')&&c<=ord('f')))){
+      current+=String.fromCodePoint(Number(c));
+      continue;
+    }
+    if(current=="0"&&c==ord('x')){//hex literal
+      base=16;
+      continue;
+    }
+    if(current=="0"&&c==ord('b')){//binary literal
+      base=2;
+      continue;
+    }
+    if(itrLang_isspace(c)){
+      if(current.length>0){
+          expr.push(BigInt(current.toString(),base));
+      }
+      base=10;
+      current=[];
+      continue;
+    }
+    if(['+','-','*','/','I','J','K','i','j','k'].map(c=>ord(c)).indexOf(c)>=0){
+      if(current.length>0){
+          expr.push(BigInt(current.toString(),base));
+      }
+      base=10;
+      expr.push(String.fromCodePoint(Number(c)));
+      current=[];
+      continue;
+    }
+    return undefined;//invalid char
+  }
+  if(current.length>0)
+    expr.push(BigInt(current.toString(),base));
+  for(let i=0;i<expr.length;i++){// '\' and imaginary units
+    if(expr[i]=='/'){
+      let l=1n,r=1n;
+      if(i>0&&itrLang_isnumber(expr[i-1])){
+          l=expr[i-1];
+          expr.splice(i-1,1);
+          i--;
+      }
+      if(i+1<expr.length&&itrLang_isnumber(expr[i+1])){
+          r=expr[i+1];
+          expr.splice(i+1,1);
+      }
+      expr[i]=itrLang_realDivide(l,r);
+    }else if(['I','J','K','i','j','k'].indexOf(expr[i])>=0){
+      let v=1n;
+      if(i>0&&itrLang_isnumber(expr[i-1])){
+          v=expr[i-1];
+          expr.splice(i-1,1);
+          i--;
+      }
+      expr[i]=0n;// itrLang_multiply(v,Complex.i);// TODO complex
+    }
+  }
+  for(let i=0;i<expr.length;i++){// '*' (has to be parsed after imaginary units
+    if(expr[i]=='*'){
+        let l=1n,r=1n;
+      if(i>0&&itrLang_isnumber(expr[i-1])){
+          l=expr[i-1];
+          expr.splice(i-1,1);
+          i--;
+      }
+      if(i+1<expr.length&&itrLang_isnumber(expr[i+1])){
+          r=expr[i+1];
+          expr.splice(i+1,1);
+      }
+      expr[i]=itrLang_multiply(l,r);
+    }
+  }
+  for(let i=0;i<expr.length;i++){// '+' and '-'
+    if(expr[i]=='+'||expr[i]=='-'){
+      let plus=expr[i]=='+';
+      let l=0n,r=0n;
+      if(i>0&&itrLang_isnumber(expr[i-1])){
+          l=expr[i-1];
+          expr.splice(i-1,1);
+          i--;
+      }
+      if(i+1<expr.length&&itrLang_isnumber(expr[i+1])){
+          r=expr[i+1];
+          expr.splice(i+1,1);
+      }
+      expr[i]=plus?itrLang_add(l,r):itrLang_subtract(l,r);
+    }
+  }
+  return expr[0];
+}
 function itrLang_findMatchingBracket(str,i,left,right){
   let k=1;
   while(i++<str.length&&k>0){
@@ -387,17 +485,9 @@ function itrLang_parseValue(str){
     }
     return buff;
   }
-  //TODO trim spaces
-  //XXX? support hex/binary numbers
-  //TODO support floats&fractions
-  let isNumber=true;
-  let negative=str[0]==ord('-');
-  (negative?str.slice(1):str).forEach(c=>{if(!itrLang_isdigit(c))isNumber=false;});
-  if(isNumber){
-    let v=0n;
-    (negative?str.slice(1):str).forEach(c=>{v*=10n;v+=c-ord('0');});
-    return negative?-v:v;
-  }
+  let n=itrLang_tryParseNumber(str);
+  if(n!==undefined)
+    return n;
   return str;
 }
 function itrLang_readBracket(left,right){
