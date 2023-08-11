@@ -42,6 +42,22 @@ class Fraction{
     return `${this.numerator}/${this.denominator}`;
   }
 }
+class Complex{
+  constructor(real,imaginary=0n){
+    if(real instanceof Complex){
+      this.real=real.real;
+      this.imaginary=real.imaginary;
+      return;
+    }
+    this.real=real;
+    this.imaginary=imaginary;
+  }
+  toString(){
+    if(this.imaginary==0n)
+      return `${this.real}`
+    return `${this.real}+i*${this.imaginary}`;
+  }
+}
 class Matrix{
   constructor(rows){
     this.rows=rows;
@@ -69,7 +85,6 @@ class Matrix{
   }
 }
 //XXX? custom float type
-//TODO complex type
 
 function itrLang_transposed(A){
   let newRows=new Array(A.ncolumns);
@@ -327,7 +342,7 @@ function itrLang_tryParseNumber(str){
           expr.splice(i-1,1);
           i--;
       }
-      expr[i]=0n;// itrLang_multiply(v,Complex.i);// TODO complex
+      expr[i]=itrLang_multiply(v,new Complex(0n,1n));
     }
   }
   for(let i=0;i<expr.length;i++){// '*' (has to be parsed after imaginary units
@@ -557,8 +572,11 @@ function itrLang_isrational(x){
 function itrLang_isreal(x){
   return typeof x === "bigint"  || x instanceof Fraction || typeof x === "number";
 }
+function itrLang_iscomplex(x){
+  return typeof x === "bigint"  || x instanceof Fraction || typeof x === "number" || x instanceof Complex;
+}
 function itrLang_isnumber(e){
-  return typeof e === "bigint"  || e instanceof Fraction || typeof e === "number";//XXX complex
+  return typeof e === "bigint"  || e instanceof Fraction || typeof e === "number" || e instanceof Complex; // XXX? add direct support for quaternions
 }
 function itrLang_numberOrMatrix(e){
   if(itrLang_isnumber(e))
@@ -572,7 +590,7 @@ function itrLang_asArray(x){
   return [x];
 }
 
-function create_numberRange(n){//create proxy that makes number look like 1 based-range as Array
+function create_numberRange(n){//create object that makes number look like 1 based-range as Array
   return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
       if(index==="length")
         return ;
@@ -596,7 +614,7 @@ function itrLang_toArray(x,numberToRange=true){
 }
 function itrLang_asBool(a){
   if(itrLang_isnumber(a)){
-    return a!=0;
+    return itrLang_compareNumbers(a,0n)!=0;
   }
   if(itrLang_numberOrMatrix(a)){
     isTrue=false;
@@ -615,17 +633,31 @@ function itrLang_asInt(a){
     return a;
   if(typeof a === "number")
     return BigInt(Math.round(a));
-  if(a instanceof Fraction)//TODO always round to nearest integer
-    return a.numerator/a.denominator;
+  if(a instanceof Fraction){
+    let d=a.numerator/a.denominator;
+    if(a.numerator<0n){
+      return itrLang_compareNumbers(2n*(d*a.denominator-a.numerator),a.denominator)<0?d:d-1n;
+    }else{
+      return itrLang_compareNumbers(2n*(a.numerator-d*a.denominator),a.denominator)<0?d:d+1n;
+    }
+  }
+  if(a instanceof Complex)
+    return itrLang_asInt(a.real);
   throw `cannot convert ${a.constructor.name} to int`;
 }
-function itrLang_asReal(a){
+// TODO ceil/floor
+function itrLang_round(a){
+  return itrLang_asInt(a);
+}
+function itrLang_asFloat(a){
   if(typeof a === "number")
     return a;
   if(typeof a === "bigint")
     return Number(a);
   if(a instanceof Fraction)
     return Number(a.numerator)/Number(a.denominator);//XXX? more precise conversion for large numbers
+  if(a instanceof Complex)
+    return itrLang_asFloat(a.real);
   throw `cannot convert ${a.constructor.name} to real`;
 }
 
@@ -687,7 +719,9 @@ function itrLang_negate(x){
       return new Fraction(-x.numerator,x.denominator);
     }
     if(itrLang_isreal(x))
-      return -itrLang_asReal(x);
+      return -itrLang_asFloat(x);
+    if(x instanceof Complex)
+      return new Complex(itrLang_negate(x.real),itrLang_negate(x.imaginary));
   throw `unsupported number type for negation: ${x.constructor.name}`;
   }
   return itrLang_unaryNumberOp(x,numberNegate);
@@ -718,8 +752,15 @@ function itrLang_compareNumbers(x,y){
     x=new Fraction(x);y=new Fraction(y);
     return x.numerator*y.denominator-y.numerator*x.denominator;
   }
-  if(itrLang_isreal(x)&& itrLang_isreal(y))
-    return itrLang_asReal(x)-itrLang_asReal(y);
+  if(itrLang_isreal(x)&& itrLang_isreal(y)){
+    let c=itrLang_asFloat(x)-itrLang_asFloat(y);
+    return c>0?1n:c<0?-1n:0n;
+  }
+  if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+    x=new Complex(x);y=new Complex(y);
+    let c=itrLang_compareNumbers(x.real,y.real);
+    return c!=0?c:itrLang_compareNumbers(x.imaginary,y.imaginary);
+  }
   throw `incompatible number types for number comparison: ${x.constructor.name} and ${y.constructor.name}`;
 }
 function itrLang_add(a,b){
@@ -731,7 +772,11 @@ function itrLang_add(a,b){
       return new Fraction(x.numerator*y.denominator+y.numerator*x.denominator,x.denominator*y.denominator);
     }
     if(itrLang_isreal(x)&& itrLang_isreal(y))
-      return itrLang_asReal(x)+itrLang_asReal(y);
+      return itrLang_asFloat(x)+itrLang_asFloat(y);
+    if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+      x=new Complex(x);y=new Complex(y);
+      return new Complex(itrLang_add(x.real,y.real),itrLang_add(x.imaginary,y.imaginary));
+    }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberAdd);
@@ -745,7 +790,11 @@ function itrLang_subtract(a,b){
       return new Fraction(x.numerator*y.denominator-y.numerator*x.denominator,x.denominator*y.denominator);
     }
     if(itrLang_isreal(x)&& itrLang_isreal(y))
-      return itrLang_asReal(x)-itrLang_asReal(y);
+      return itrLang_asFloat(x)-itrLang_asFloat(y);
+    if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+      x=new Complex(x);y=new Complex(y);
+      return new Complex(itrLang_subtract(x.real,y.real),itrLang_subtract(x.imaginary,y.imaginary));
+    }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberSubtract);
@@ -753,10 +802,14 @@ function itrLang_subtract(a,b){
 function itrLang_invert(a){
   if(itrLang_isint(a))
      return new Fraction(1n,a);
-  if(itrLang_isrational(a))
+  if(a instanceof Fraction)
      return new Fraction(a.denominator,a.numerator);
   if(itrLang_isreal(a))
-    return a==0?0:1/a;
+    return a==0?0:1/itrLang_asFloat(a);
+  if(a instanceof Complex){ // 1/(a+bi)= (a-bi) / (a²+b²)
+      let l2=itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary));
+    return new Complex(itrLang_realDivide(a.real,l2),itrLang_realDivide(itrLang_negate(a.imaginary),l2));
+  }
   if(a instanceof Matrix)
     return itrLang_minv(a);
   if(a instanceof Array)
@@ -774,7 +827,14 @@ function itrLang_realDivide(a,b){
       return new Fraction(x.numerator*y.denominator,x.denominator*y.numerator);
     }
     if(itrLang_isreal(x)&& itrLang_isreal(y))
-      return itrLang_asReal(x)/itrLang_asReal(y);
+      return itrLang_asFloat(x)/itrLang_asFloat(y);
+    if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+      x=new Complex(x);y=new Complex(y);
+      let l2=itrLang_add(itrLang_multiply(y.real,y.real),itrLang_multiply(y.imaginary,y.imaginary));
+      return new Complex(
+        itrLang_realDivide(itrLang_add(itrLang_multiply(x.real,y.real),itrLang_multiply(x.imaginary,y.imaginary)),l2),
+        itrLang_realDivide(itrLang_subtract(itrLang_multiply(x.imaginary,y.real),itrLang_multiply(x.real,y.imaginary)),l2));
+    }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberDivide);
@@ -787,10 +847,15 @@ function itrLang_intDivide(a,b){
       return x/y;
     if(itrLang_isrational(x) && itrLang_isrational(y)){
       x=new Fraction(x);y=new Fraction(y);
-      return (x.numerator*y.denominator)/(x.denominator*y.numerator);
+      return (x.numerator*y.denominator)/(x.denominator*y.numerator);// TODO always round down
     }
     if(itrLang_isreal(x)&& itrLang_isreal(y))
-      return Math.floor(itrLang_asReal(x)/itrLang_asReal(y));
+      return Math.floor(itrLang_asFloat(x)/itrLang_asFloat(y));
+    if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+      x=new Complex(x);y=new Complex(y);
+      let d=itrLang_realDivide(x,y);
+      return new Complex(itrLang_round(d.real),itrLang_round(d.imaginary));
+    }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberDivide);
@@ -801,13 +866,10 @@ function itrLang_remainder(a,b){
       return x;
     if(itrLang_isint(x) && itrLang_isint(y))
       return x%y;
-    if(itrLang_isrational(x) && itrLang_isrational(y)){
-      x=new Fraction(x);y=new Fraction(y);
-      let i=(x.numerator*y.denominator)/(x.denominator*y.numerator);
-      return new Fraction(x.numerator*y.denominator-i*(x.denominator*y.numerator),x.denominator*y.denominator);
+    if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
+      let d=itrLang_intDivide(x,y);
+      return itrLang_subtract(a,itrLang_multiply(b,d));
     }
-    if(itrLang_isreal(x)&& itrLang_isreal(y))
-      return (itrLang_asReal(x)/itrLang_asReal(y))%1;
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberRemainder);
@@ -823,7 +885,13 @@ function itrLang_multiply(a,b){
       return new Fraction(a.numerator*b.numerator,a.denominator*b.denominator);
     }
     if(itrLang_isreal(a)&& itrLang_isreal(b))
-      return itrLang_asReal(a)*itrLang_asReal(b);
+      return itrLang_asFloat(a)*itrLang_asFloat(b);
+    if(itrLang_iscomplex(a)&& itrLang_iscomplex(a)){
+      a=new Complex(a);b=new Complex(b);
+      return new Complex(
+        itrLang_subtract(itrLang_multiply(a.real,b.real),itrLang_multiply(a.imaginary,b.imaginary)),
+        itrLang_add(itrLang_multiply(a.imaginary,b.real),itrLang_multiply(a.real,b.imaginary)));
+    }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   if(a instanceof Matrix&&b instanceof Matrix){
@@ -1708,15 +1776,24 @@ function itrLang_stepProgram(){
       }break;
     case ord('s'):{//sign
         let a=itrLang_popValue();
-        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>{let c=itrLang_compareNumbers(x,0n);return c>0?1n:c<0?-1n:0n;}));
+        itrLang_pushValue(itrLang_unaryNumberOp(a,x=>{
+          if(itrLang_isreal(x)){
+            let c=itrLang_compareNumbers(x,0n);return c>0?1n:c<0?-1n:0n;
+          }
+          if(x instanceof Complex)
+            return itrLang_divide(x,Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary)))));
+          throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
+        }));
       }break;
     case ord('a'):{//absolute value/determinant
         let a=itrLang_popValue();
         let f=(x)=>{
           if(x instanceof Array)
             return x.map(f);
-          if(itrLang_isnumber(x))
+          if(itrLang_isreal(x))
             return itrLang_compareNumbers(x,0n)<0?itrLang_negate(x):x;
+          if(x instanceof Complex)
+            return Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary))));
           if(x instanceof Matrix)
             return itrLang_determinant(x);
           throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
@@ -1784,6 +1861,10 @@ function itrLang_stepProgram(){
     case ord('½'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_divide(a,2n));
+      }break;
+    case ord('i'):case ord('j'):case ord('k'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_multiply(a,new Complex(0n,1n)));
       }break;
     case ord('²'):{
         let a=itrLang_popValue();
