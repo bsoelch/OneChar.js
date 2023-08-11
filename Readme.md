@@ -1,6 +1,6 @@
 # OneChar.js
 
-Online interpreter for [Itr](https://github.com/bsoelch/OneChar.js/blob/main/ItrLang.md), [ForWhile](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
+Online interpreter for [Itr](https://github.com/bsoelch/ItrLang), [ForWhile](https://github.com/bsoelch/ForWhile) and [OneChar](https://github.com/bsoelch/OneChar2)
 
 ## Usage
 
