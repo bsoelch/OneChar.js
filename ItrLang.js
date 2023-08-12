@@ -839,15 +839,24 @@ function itrLang_realDivide(a,b){
   }
   return itrLang_binaryNumberOp(a,b,numberDivide);
 }
+// floor division for Big Integers
+function itrLang_floorDivide(a,b){
+  if(a>0)
+      return a/b;
+  let q=a/b,r=a%b;
+  if(r<0)
+      return q-1n;
+  return q;
+}
 function itrLang_intDivide(a,b){
   numberDivide=(x,y)=>{
     if(x==0||y==0)// set 0/0 to 0
       return 0n;
     if(itrLang_isint(x) && itrLang_isint(y))
-      return x/y;
+      return itrLang_floorDivide(x,y);
     if(itrLang_isrational(x) && itrLang_isrational(y)){
-      x=new Fraction(x);y=new Fraction(y);
-      return (x.numerator*y.denominator)/(x.denominator*y.numerator);// TODO always round down
+      let d=itrLang_realDivide(x,y);
+      return itrLang_floorDivide(d.numerator,d.denominator);
     }
     if(itrLang_isreal(x)&& itrLang_isreal(y))
       return Math.floor(itrLang_asFloat(x)/itrLang_asFloat(y));
@@ -864,8 +873,6 @@ function itrLang_remainder(a,b){
   numberRemainder=(x,y)=>{
     if(x==0||y==0)// set a%0 to a
       return x;
-    if(itrLang_isint(x) && itrLang_isint(y))
-      return x%y;
     if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
       let d=itrLang_intDivide(x,y);
       return itrLang_subtract(a,itrLang_multiply(b,d));
