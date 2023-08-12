@@ -101,6 +101,7 @@ function stdoutWrite(chr){
   output.value=utf8Decode.decode(new Uint8Array(stdOutBytes));
   if(stdOutBytes.length>MAX_CONSOLE_CHARS){
     console.error("exceeded console capacity");
+    running=false;
   }
 }
 function outputEmpty(){
