@@ -99,9 +99,9 @@ binary:
 * `-` subtraction
 * `·` multiplication
 * `÷` fractional division
-* `:` integer-division
-* `%` remainder
-* `&`/`|`/`^` bit-wise and/or/xor
+* `:` integer-division (real numbers are rounded down, complex numbers are rounded to nearest Gaussian integer)
+* `%` mod (`a%b = a-b*(a:b)`)
+* `&`/`|`/`^` bit-wise and/or/xor (argument is rounded to nearest integer)
 * `<`/`=`/`>` compare all elements returns `1` if condition satisfied and `0` otherwise
 
 ### Matrix operations
