@@ -41,6 +41,8 @@ const codeArea=document.getElementById("codeArea");//use text-area for capturing
 let stdinIndex=0;
 let stdOutBytes=[];
 
+let MAX_CONSOLE_CHARS=10000;
+
 function b64encode(str) {
   let x = btoa(str);
   return x.replace(/\+/g, '-').replace(/\//g, '_');
@@ -90,10 +92,16 @@ function stdinUnread(){
     stdinIndex--;
 }
 function stdoutWrite(chr){
+  if(stdOutBytes.length>MAX_CONSOLE_CHARS){
+    return;
+  }
   if(chr<0)
     chr=(chr%256+256);
   stdOutBytes.push(chr%256);
   output.value=utf8Decode.decode(new Uint8Array(stdOutBytes));
+  if(stdOutBytes.length>MAX_CONSOLE_CHARS){
+    console.error("exceeded console capacity");
+  }
 }
 function outputEmpty(){
   return stdOutBytes.length==0;
