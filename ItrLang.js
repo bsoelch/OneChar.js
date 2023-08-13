@@ -1057,16 +1057,17 @@ function itrLang_onStart(){
 }
 
 const ITR_OP_NONE=0;
-const ITR_OP_MAP=1;
-const ITR_OP_REDUCE=2;
-const ITR_OP_FLAT_MAP=3;
-const ITR_OP_ZIP=4;//zip operation
-const ITR_OP_CAUCHY=5;//Cauchy-product
-const ITR_OP_TIMES=6;//go through all elements of Cartesian product
-const ITR_OP_SUBSET=7;//go through all elements of power set
+const ITR_OP_FOR=1;
+const ITR_OP_MAP=2;
+const ITR_OP_REDUCE=3;
+const ITR_OP_FLAT_MAP=4;
+const ITR_OP_ZIP=5;//zip operation
+const ITR_OP_CAUCHY=6;//Cauchy-product
+const ITR_OP_TIMES=7;//go through all elements of Cartesian product
+const ITR_OP_SUBSET=8;//go through all elements of power set
 
 //list of all iterator operations
-const iteratorOps=[ord('µ'),ord('R'),ord('M'),ord('×'),ord('Y'),ord('C'),ord('¶')];
+const iteratorOps=[ord('F'),ord('µ'),ord('R'),ord('M'),ord('×'),ord('Y'),ord('C'),ord('¶')];
 //list of all operators that are allowed as an isolated argument to a iterator operation
 const singleByteIteratorArgs=[
   ord(' '),ord('£'),ord('¥'),
@@ -1156,13 +1157,18 @@ class ForEachItr extends ItrLang_Iterator{
   constructor(vector,opType=ITR_OP_MAP){
     super();
     this.vector=vector;
-    this.unwraped=(opType==ITR_OP_REDUCE||opType==ITR_OP_FLAT_MAP);
+    this.ignoreItr=opType==ITR_OP_FOR;
+    this.unwraped=(opType==ITR_OP_REDUCE||opType==ITR_OP_FLAT_MAP||opType==ITR_OP_FOR);
     this.index=0;
   }
   hasNext(){
     return this.index<this.vector.length;
   }
   pushNext(){
+    if(this.ignoreItr){
+      this.index++;
+      return;
+    }
     itrLang_pushValue(this.vector.at(this.index++));
   }
   onEnd(){
@@ -1301,6 +1307,20 @@ class SubsetItr extends ItrLang_Iterator{
 function itrLang_applyItrOp(itrOp,code){
   if(itrOp==ITR_OP_NONE)
     return;
+  if(itrOp==ITR_OP_FOR){
+    let count=itrLang_popValue();
+    if(!itrLang_isnumber(count)){// XXX? apply 'F'-loop to each element of array/matrix
+      console.error("unsupported value for iteration count: "+count.constructor.name);
+      return;
+    }
+    let iterator=new ForEachItr(itrLang_toArray(count),itrOp);// XXX? own iterator type
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(iterator);
+    sourceCode=code;
+    ip=0n;
+    return;
+  }
   if(itrOp==ITR_OP_MAP||itrOp==ITR_OP_REDUCE||itrOp==ITR_OP_FLAT_MAP){
     let vector=itrLang_toArray(itrLang_popValue());
     let iterator=new ForEachItr(vector,itrOp);
@@ -1948,6 +1968,35 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_pow(a,b));
       }break;
+    case ord('T'):{
+        let a = itrLang_popValue();
+        if(itrLang_isnumber(a)){
+            itrLang_pushValue(a);
+            return;
+        }
+        if(a instanceof Matrix){
+            itrLang_pushValue(itrLang_transposed(a));
+            return;
+        }
+        if(a instanceof Array){//transpose tuple
+            let res=[];
+            for(let r=0;r<a.length;r++){
+                let row=itrLang_asArray(a[r]);
+                for(let c=0;c<row.length;c++){
+                    while(res.length<row.length){
+                      let tmp=new Array(a.length);
+                      tmp.fill(0n);
+                      res.push(tmp);
+                    }
+                    let column=res[c];
+                    column[r]=row[c];
+                }
+            }
+            itrLang_pushValue(res);
+            return;
+        }
+        throw new UnsupportedOperationException("cannot transpose values of type: "+a.getClass().getName());
+      }break;
     // vector operations
     case ord('¡'):{
         let a=itrLang_toArray(itrLang_popValue(),false);
@@ -1958,6 +2007,12 @@ function itrLang_stepProgram(){
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
       }break;
+    case ord('F'): {//repeat ... times
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_FOR,l);
+        return;//unfinished operation
+     }
     case ord('µ'):{//map
         let l=[];
         ip=readItrArgs(ip,l);
