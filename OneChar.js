@@ -950,5 +950,7 @@ function programLoop(loopId){
   steps.push(performance.now()-start);
 }
 function runProgram(){
+  if(interpreter==INTERPRETER_ITRLANG)
+    itrLang_onStart();
   programLoop(++progId);
 }

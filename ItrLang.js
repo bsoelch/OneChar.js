@@ -230,13 +230,21 @@ function itrLang_pushValue(val){
   valueStack.push(val);
 }
 function itrLang_popValue(val){
-  if(valueStack.length<=0)
-    return 0n;
+  if(valueStack.length<=0){
+    if(implicitIn)
+      itrLang_readValue();
+    else
+      return 0n;
+  }
   return valueStack.pop();
 }
 function itrLang_peekValue(val){
-  if(valueStack.length<=0)
-    return 0n;
+  if(valueStack.length<=0){
+    if(implicitIn)
+      itrLang_readValue();
+    else
+      return 0n;
+  }
   return valueStack.at(-1);
 }
 function putCodePoint(cp){
@@ -1005,8 +1013,47 @@ function itrLang_overwriteOp(op,value,autoCall){
   let o=new ItrLang_OpOverwrite(op,value,autoCall);
   overwrites.set(op,o);
 }
-function itrLangInit(){
+function itrLangInit(code){
   overwrites=new Map([]);
+  implicitIn=true;
+  implicitOut=true;
+}
+function itrLang_onStart(){
+  let code=sourceCode;
+  let stringMode=false;
+  for(let i=0;i<code.length;i++){
+      if(stringMode){
+          if(code[i]==ord('\\')){
+              i++;
+              continue;
+          }
+          if(code[i]==ord('"')){
+              stringMode=false;
+          }
+          continue;
+      }
+      if([ord('_'),ord('#'),ord('§')].indexOf(code[i])>=0){
+          implicitIn=false;
+          continue;
+      }
+      if([ord('£'),ord('¥')].indexOf(code[i])>=0){
+          implicitOut=false;
+          continue;
+      }
+      if(code[i]==ord('"')){
+          stringMode=true;
+          continue;
+      }
+        if(code[i]==ord('\'')){
+            i++;
+            continue;
+        }
+      if(code[i]==ord(';')){
+          while(i<code.length&&code[i]!=ord('\n'))
+              i++;
+          continue;
+      }
+  }
 }
 
 const ITR_OP_NONE=0;
@@ -1381,8 +1428,7 @@ function itrLang_finishedSubroutine(){
     return;
   }
   running=false;
-  // FIXME no implicit output if program contains output operators
-  if(outputEmpty()){//output top stack element
+  if(implicitOut){//output top stack element
     itrLang_printValue(itrLang_peekValue(),true);
   }
 }

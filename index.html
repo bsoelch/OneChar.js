@@ -114,6 +114,10 @@ function reset(){
   stdOutBytes=[];
   output.value="";
 }
+function setProgram(code){
+  reset();
+  codeArea.value=code;
+}
 function run(){
   reset();
   loadProgram(codeArea.value);
