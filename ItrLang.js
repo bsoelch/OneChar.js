@@ -600,12 +600,16 @@ function itrLang_asArray(x){
 
 function create_numberRange(n){//create object that makes number look like 1 based-range as Array
   return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
-      if(index==="length")
-        return ;
       index=Number(index);
       if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
         return 0n;
       return BigInt(index)+1n;
+    },slice: function(from,to){
+      let ret=new Array(Math.max(to-from,0));
+      for(let i=0;i<to-from;i++){
+        ret[i]=this.at(i+from);
+      }
+      return ret;
     }
   };
 }
@@ -2006,6 +2010,89 @@ function itrLang_stepProgram(){
         let b=itrLang_asArray(itrLang_popValue());
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
+      }break;
+    case ord('é'):{
+        let n=1;
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){
+          n=Number(itrLang_asInt(v));
+          v=itrLang_popValue();
+        }
+        v=itrLang_toArray(v,true);
+        let head=v.slice(0,v.length-n),tail=v.slice(v.length-n,v.length);
+        itrLang_pushValue(head);
+        itrLang_pushValue(tail.length==1?tail[0]:tail);
+      }break;
+    case ord('è'):{
+        let n=1;
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){
+          n=Number(itrLang_asInt(v));
+          v=itrLang_popValue();
+        }
+        v=itrLang_toArray(v,true);
+        let head=v.slice(0,n),tail=v.slice(n,v.length);
+        itrLang_pushValue(tail);
+        itrLang_pushValue(head.length==1?head[0]:head);
+      }break;
+    case ord('ê'):{
+        let n=2;
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){
+          n=Number(itrLang_asInt(v));
+          v=itrLang_popValue();
+        }
+        v=itrLang_toArray(v,true);
+        let reverse=false;
+        if(n<0){
+          n=-n;
+          reverse=true;
+        }
+        let parts=new Array(n);
+        for(let i=0;i<n;i++){
+          let left=Math.round((i*v.length)/n);
+          let right=Math.round(((i+1)*v.length)/n);
+          parts[i]=v.slice(left,right);
+        }
+        if(reverse){
+          for(let i=n-1;i>=0;i--){
+            itrLang_pushValue(parts[i]);
+          }
+        }else{
+          for(let i=0;i<n;i++){
+            itrLang_pushValue(parts[i]);
+          }
+        }
+      }break;
+    case ord('ë'):{
+        let n=2;
+        let v=itrLang_popValue();
+        if(itrLang_isnumber(v)){
+          n=Number(itrLang_asInt(v));
+          v=itrLang_popValue();
+        }
+        v=itrLang_toArray(v,true);
+        let reverse=false;
+        if(n<0){
+          n=-n;
+          reverse=true;
+        }
+        let parts=new Array(n);
+        for(let i=0;i<n;i++){
+          parts[i]=[];
+        }
+        for(let i=0;i<v.length;i++){
+          parts[i%n].push(v[i]);
+        }
+        if(reverse){
+          for(let i=n-1;i>=0;i--){
+            itrLang_pushValue(parts[i]);
+          }
+        }else{
+          for(let i=0;i<n;i++){
+            itrLang_pushValue(parts[i]);
+          }
+        }
       }break;
     case ord('F'): {//repeat ... times
         let l=[];
