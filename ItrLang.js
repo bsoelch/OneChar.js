@@ -1843,6 +1843,16 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)<0)));
       }break;
+    case ord('m'):{//minimum
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_compareNumbers(x,y)<0?x:y));
+      }break;
+    case ord('w'):{//maximum
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_compareNumbers(x,y)>0?x:y));
+      }break;
     case ord('¬'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_asBool(x)?0:1)));
