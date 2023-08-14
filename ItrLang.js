@@ -1199,7 +1199,9 @@ class ZipItr extends ItrLang_Iterator{
     this.index++;
   }
   onEnd(){
-    // do nothing
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
   }
 }
 class CauchyItr extends ItrLang_Iterator{
