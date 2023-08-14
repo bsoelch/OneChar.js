@@ -906,7 +906,7 @@ function itrLang_remainder(a,b){
       return x;
     if(itrLang_iscomplex(x)&& itrLang_iscomplex(y)){
       let d=itrLang_intDivide(x,y);
-      return itrLang_subtract(a,itrLang_multiply(b,d));
+      return itrLang_subtract(x,itrLang_multiply(y,d));
     }
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
