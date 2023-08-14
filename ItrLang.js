@@ -1079,7 +1079,7 @@ const singleByteIteratorArgs=[
   ord('¬'),ord('s'),ord('a'),ord('¿'),ord('~'),ord('¯'),
   ord('e'),ord('*'),ord('/'),ord('\\'),ord('^'),
   ord('¡'),ord('°'),ord('L'),ord('º'),ord('¹'),ord('S'),ord('P'),ord('Í'),ord('Ì'),ord('®')
-];
+];// XXX? add ² ³ T
 
 function readItrArgs(ip,argString){
   let op=readInstruction(ip++);
@@ -1580,7 +1580,7 @@ function itrLang_stepProgram(){
   }
   if(command==ord('\'')){
     command=readInstruction(ip++);
-    itrLang_pushValue([command]);//push char as string
+    itrLang_pushValue(command);//push char as string
     return;
   }
   if(command==ord('"')){
