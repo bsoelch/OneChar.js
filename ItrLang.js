@@ -599,19 +599,38 @@ function itrLang_asArray(x){
 }
 
 function create_numberRange(n){//create object that makes number look like 1 based-range as Array
-  return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
-      index=Number(index);
-      if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
-        return 0n;
-      return BigInt(index)+1n;
-    },slice: function(from,to){
-      let ret=new Array(Math.max(to-from,0));
-      for(let i=0;i<to-from;i++){
-        ret[i]=this.at(i+from);
+  if(itrLang_isreal(n))
+    return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
+        index=Number(index);
+        if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
+          return 0n;
+        return BigInt(index)+1n;
+      },slice: function(from,to){
+        let ret=new Array(Math.max(to-from,0));
+        for(let i=0;i<to-from;i++){
+          ret[i]=this.at(i+from);
+        }
+        return ret;
       }
-      return ret;
-    }
-  };
+    };
+  if(itrLang_iscomplex(n)){
+    n=new Complex(n);
+    return {val:n,rows:Number(itrLang_asInt(n.imaginary))+1,length:(Number(itrLang_asInt(n.real))+1)*(Number(itrLang_asInt(n.imaginary))+1)-1,at: function(index){
+        index=Number(index);
+        if(index<0||index>=this.length||index!=Math.floor(index))
+          return 0n;
+        let re=Math.floor((index+1)/this.rows),im=(index+1)%this.rows;
+        return new Complex(BigInt(re),BigInt(im));
+      },slice: function(from,to){
+        let ret=new Array(Math.max(to-from,0));
+        for(let i=0;i<to-from;i++){
+          ret[i]=this.at(i+from);
+        }
+        return ret;
+      }
+    };
+  }
+  throw `unsupported type for number range: ${a.constructor.name}`;
 }
 function itrLang_toArray(x,numberToRange=true){
   if(x instanceof Array)
@@ -1899,11 +1918,23 @@ function itrLang_stepProgram(){
       }break;
     case ord('º'):{
         let a=itrLang_popValue();
-        if(itrLang_isnumber(a)){//XXX? 2D range for complex numbers
+        if(itrLang_isreal(a)){
           let r=[];
           for(let i=0n;itrLang_compareNumbers(i,a)<0;i++)
             r.push(i);
           itrLang_pushValue(r);
+          break;
+        }
+        if(itrLang_iscomplex(a)){
+          a=new Complex(a);
+          let elts=[];
+          for(let r=0n;itrLang_compareNumbers(r,a.real)<=0;r++){
+            for(let i=0n;itrLang_compareNumbers(i,a.imaginary)<=0;i++){
+              if(itrLang_compareNumbers(r,a.real)<0||itrLang_compareNumbers(i,a.imaginary)<0)
+                elts.push(new Complex(r,i));
+            }
+          }
+          itrLang_pushValue(elts);
           break;
         }
         if(a instanceof Array){
@@ -1918,11 +1949,23 @@ function itrLang_stepProgram(){
       }break;
     case ord('¹'):{
         let a=itrLang_popValue();
-        if(itrLang_isnumber(a)){
+        if(itrLang_isreal(a)){
           let r=[];
           for(let i=1n;itrLang_compareNumbers(i,a)<=0;i++)
             r.push(i);
           itrLang_pushValue(r);
+          break;
+        }
+        if(itrLang_iscomplex(a)){
+          a=new Complex(a);
+          let elts=[];
+          for(let r=0n;itrLang_compareNumbers(r,a.real)<=0;r++){
+            for(let i=0n;itrLang_compareNumbers(i,a.imaginary)<=0;i++){
+              if(r>0n||i>0n)
+                elts.push(new Complex(r,i));
+            }
+          }
+          itrLang_pushValue(elts);
           break;
         }
         if(a instanceof Array){
@@ -2158,13 +2201,16 @@ function itrLang_stepProgram(){
         let v=itrLang_popValue();
         if(itrLang_isnumber(v)){//skip conversion of number to array and calculate result directly
           //number is treated as if it were the 1-based range starting at that number
-          //XXX? handle complex numbers
-          if(itrLang_compareNumbers(v,0n)<=0){
-            itrLang_pushValue(0n);
+          if(itrLang_isreal(v)&&itrLang_compareNumbers(v,0n)>=0){
+            v=itrLang_asInt(v);
+            itrLang_pushValue((v*(v+1n))/2n);
             return;
           }
-          v=itrLang_asInt(v);
-          itrLang_pushValue((v*(v+1n))/2n);
+          let r=create_numberRange(v);
+          let S=0n;
+          for(let i=0;i<r.length;i++)
+            S=itrLang_add(S,r.at(i));
+          itrLang_pushValue(S);
           return;
         }
         v=itrLang_toArray(v);
@@ -2179,10 +2225,10 @@ function itrLang_stepProgram(){
         let v=itrLang_popValue();
         if(itrLang_isnumber(v)){//skip conversion of number to array and calculate result directly
           //number is treated as if it were the 1-based range starting at that number
-          //XXX? handle complex numbers
+          let r=create_numberRange(v);
           let P=1n;
-          for(let i=1n;itrLang_compareNumbers(i,v)<=0;i++)
-            P*=i;
+          for(let i=0;i<r.length;i++)
+            P=itrLang_multiply(P,r.at(i));
           itrLang_pushValue(P);
           return;
         }
