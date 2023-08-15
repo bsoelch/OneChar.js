@@ -1986,6 +1986,25 @@ function itrLang_stepProgram(){
         else
           itrLang_pushValue(1n);
       }break;
+    case ord('B'):{ // bits
+        let a=itrLang_popValue();
+        if(itrLang_isnumber(a)){
+          a=itrLang_asInt(a);
+          let bits=[];
+          while(a!=0n){
+            bits.push(a&1n);
+            if(~a==0n)
+              break;
+            a>>=1n;
+          }
+          itrLang_pushValue(bits);
+          return;
+        }
+        a=itrLang_asArray(a);
+        let n=0n;
+        a.forEach(e=>{n<<=1n;n+=BigInt(itrLang_asBool(e))});
+        itrLang_pushValue(n);
+      }break;
     case ord('e'):{//exponential
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_exp(a));
@@ -2239,6 +2258,12 @@ function itrLang_stepProgram(){
           return res;
         }
         itrLang_pushValue(f(v));
+      }break;
+    case ord('Z'):{//nonzero elements
+        let v=itrLang_asArray(itrLang_popValue());
+        let res=[];
+        v.forEach(e=>{if(itrLang_asBool(e))res.push(e);});
+        itrLang_pushValue(res);
       }break;
     case ord('Ì'):{//indices of nonzero elements
         let v=itrLang_asArray(itrLang_popValue());
