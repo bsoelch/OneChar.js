@@ -600,13 +600,12 @@ function itrLang_asArray(x){
 
 function create_numberRange(n){//create object that makes number look like 1 based-range as Array
   if(itrLang_isreal(n)){
-    n=itrLang_asInt(n);
     let sign=1n;
-    if(n<0){
-      n=-n;
+    if(itrLang_compare(n,0n)<0){
+      n=itrlang_negate(n);
       sign=-1n;
     }
-    return {val:n,length:Number(n),at: function(index){
+    return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
         index=Number(index);
         if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
           return 0n;
