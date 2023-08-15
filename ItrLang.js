@@ -599,12 +599,18 @@ function itrLang_asArray(x){
 }
 
 function create_numberRange(n){//create object that makes number look like 1 based-range as Array
-  if(itrLang_isreal(n))
-    return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
+  if(itrLang_isreal(n)){
+    n=itrLang_asInt(n);
+    let sign=1n;
+    if(n<0){
+      n=-n;
+      sign=-1n;
+    }
+    return {val:n,length:Number(n),at: function(index){
         index=Number(index);
         if(index<0||itrLang_compareNumbers(index,this.val)>=0||index!=Math.floor(index))
           return 0n;
-        return BigInt(index)+1n;
+        return sign*(BigInt(index)+1n);
       },slice: function(from,to){
         let ret=new Array(Math.max(to-from,0));
         for(let i=0;i<to-from;i++){
@@ -613,14 +619,24 @@ function create_numberRange(n){//create object that makes number look like 1 bas
         return ret;
       }
     };
+  }
   if(itrLang_iscomplex(n)){
     n=new Complex(n);
+    let realSign=1n,imagSign=1n;
+    if(itrLang_compareNumbers(n.real,0n)<0){
+      realSign=-1n;
+      n.real=itrLang_negate(n.real);
+    }
+    if(itrLang_compareNumbers(n.imaginary,0n)<0){
+      imagSign=-1n;
+      n.imaginary=itrLang_negate(n.imaginary);
+    }
     return {val:n,rows:Number(itrLang_asInt(n.imaginary))+1,length:(Number(itrLang_asInt(n.real))+1)*(Number(itrLang_asInt(n.imaginary))+1)-1,at: function(index){
         index=Number(index);
         if(index<0||index>=this.length||index!=Math.floor(index))
           return 0n;
         let re=Math.floor((index+1)/this.rows),im=(index+1)%this.rows;
-        return new Complex(BigInt(re),BigInt(im));
+        return new Complex(realSign*BigInt(re),imagSign*BigInt(im));
       },slice: function(from,to){
         let ret=new Array(Math.max(to-from,0));
         for(let i=0;i<to-from;i++){
@@ -850,7 +866,7 @@ function itrLang_invert(a){
 function itrLang_realDivide(a,b){
   numberDivide=(x,y)=>{
     if(x==0||y==0)// set 0/0 to 0
-      return 0n;
+      return 0n;//TODO return correct type
     if(itrLang_isint(x) && itrLang_isint(y))
       return new Fraction(x,y);
     if(itrLang_isrational(x) && itrLang_isrational(y)){
@@ -914,7 +930,7 @@ function itrLang_remainder(a,b){
 }
 function itrLang_multiply(a,b){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
-    if(a==0||b==0)
+    if(a==0||b==0)//TODO return correct type
       return 0n;
     if(itrLang_isint(a) && itrLang_isint(b))
       return a*b;
@@ -1924,18 +1940,32 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         if(itrLang_isreal(a)){
           let r=[];
+          let sign=1n;
+          if(itrLang_compareNumbers(a,0n)<0){
+            a=itrLang_negate(a);
+            sign=-1n;
+          }
           for(let i=0n;itrLang_compareNumbers(i,a)<0;i++)
-            r.push(i);
+            r.push(sign*i);
           itrLang_pushValue(r);
           break;
         }
         if(itrLang_iscomplex(a)){
           a=new Complex(a);
+          let realSign=1n,imagSign=1n;
+          if(itrLang_compareNumbers(a.real,0n)<0){
+            realSign=-1n;
+            a.real=itrLang_negate(a.real);
+          }
+          if(itrLang_compareNumbers(a.imaginary,0n)<0){
+            imagSign=-1n;
+            a.imaginary=itrLang_negate(a.imaginary);
+          }
           let elts=[];
           for(let r=0n;itrLang_compareNumbers(r,a.real)<=0;r++){
             for(let i=0n;itrLang_compareNumbers(i,a.imaginary)<=0;i++){
               if(itrLang_compareNumbers(r,a.real)<0||itrLang_compareNumbers(i,a.imaginary)<0)
-                elts.push(new Complex(r,i));
+                elts.push(new Complex(realSign*r,imagSign*i));
             }
           }
           itrLang_pushValue(elts);
@@ -1954,19 +1984,33 @@ function itrLang_stepProgram(){
     case ord('¹'):{
         let a=itrLang_popValue();
         if(itrLang_isreal(a)){
+          let sign=1n;
+          if(itrLang_compareNumbers(a,0n)<0){
+            a=itrLang_negate(a);
+            sign=-1n;
+          }
           let r=[];
           for(let i=1n;itrLang_compareNumbers(i,a)<=0;i++)
-            r.push(i);
+            r.push(sign*i);
           itrLang_pushValue(r);
           break;
         }
         if(itrLang_iscomplex(a)){
           a=new Complex(a);
+          let realSign=1n,imagSign=1n;
+          if(itrLang_compareNumbers(a.real,0n)<0){
+            realSign=-1n;
+            a.real=itrLang_negate(a.real);
+          }
+          if(itrLang_compareNumbers(a.imaginary,0n)<0){
+            imagSign=-1n;
+            a.imaginary=itrLang_negate(a.imaginary);
+          }
           let elts=[];
           for(let r=0n;itrLang_compareNumbers(r,a.real)<=0;r++){
             for(let i=0n;itrLang_compareNumbers(i,a.imaginary)<=0;i++){
               if(r>0n||i>0n)
-                elts.push(new Complex(r,i));
+                elts.push(new Complex(realSign*r,imagSign*i));
             }
           }
           itrLang_pushValue(elts);
@@ -2004,9 +2048,17 @@ function itrLang_stepProgram(){
           itrLang_pushValue(bits);
           return;
         }
-        a=itrLang_asArray(a);
+        a=itrLang_toArray(a);
         let n=0n,mask=1n;
-        a.forEach(e=>{n+=mask*BigInt(itrLang_asBool(e));mask<<=1n;});
+        f=e=>{//flatten array
+          if(itrLang_isnumber(e)){
+            n+=mask*BigInt(itrLang_asBool(e));
+            mask<<=1n;
+            return;
+          }
+          itrLang_toArray(e).forEach(f);
+        }
+        a.forEach(f);
         itrLang_pushValue(n);
       }break;
     case ord('e'):{//exponential
@@ -2080,7 +2132,7 @@ function itrLang_stepProgram(){
         throw new UnsupportedOperationException("cannot transpose values of type: "+a.getClass().getName());
       }break;
     // vector operations
-    case ord('¡'):{
+    case ord('¡'):{// TODO reverse rows and columns when reversing matrix
         let a=itrLang_toArray(itrLang_popValue(),false);
         itrLang_pushValue(a.toReversed());
       }break;
