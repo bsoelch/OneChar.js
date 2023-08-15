@@ -1339,6 +1339,10 @@ function itrLang_applyItrOp(itrOp,code){
       return;
     }
     let iterator=new ForEachItr(itrLang_toArray(count),itrOp);// XXX? own iterator type
+    if(!iterator.hasNext()){
+      return;
+    }
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
     callStackPush(iterator);
