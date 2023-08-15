@@ -601,7 +601,7 @@ function itrLang_asArray(x){
 function create_numberRange(n){//create object that makes number look like 1 based-range as Array
   if(itrLang_isreal(n)){
     let sign=1n;
-    if(itrLang_compare(n,0n)<0){
+    if(itrLang_compareNumbers(n,0n)<0){
       n=itrlang_negate(n);
       sign=-1n;
     }
