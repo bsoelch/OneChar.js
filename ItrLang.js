@@ -2001,8 +2001,8 @@ function itrLang_stepProgram(){
           return;
         }
         a=itrLang_asArray(a);
-        let n=0n;
-        a.forEach(e=>{n<<=1n;n+=BigInt(itrLang_asBool(e))});
+        let n=0n,mask=1n;
+        a.forEach(e=>{n+=mask*BigInt(itrLang_asBool(e));mask<<=1n;});
         itrLang_pushValue(n);
       }break;
     case ord('e'):{//exponential
