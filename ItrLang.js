@@ -602,7 +602,7 @@ function create_numberRange(n){//create object that makes number look like 1 bas
   if(itrLang_isreal(n)){
     let sign=1n;
     if(itrLang_compareNumbers(n,0n)<0){
-      n=itrlang_negate(n);
+      n=itrLang_negate(n);
       sign=-1n;
     }
     return {val:n,length:Number(itrLang_asInt(n)),at: function(index){
@@ -1169,6 +1169,8 @@ function readItrArgs(ip,argString){
         op=readInstruction(ip++);
         continue;
       }
+      op=readInstruction(ip++);
+      continue;
     }
     if(op==ord('\'')){
       op=readInstruction(ip++);
@@ -1353,6 +1355,8 @@ function itrLang_applyItrOp(itrOp,code){
       console.error("unsupported value for iteration count: "+count.constructor.name);
       return;
     }
+    if(itrLang_compareNumbers(count,0n)<0)
+      count=0n;
     let iterator=new ForEachItr(itrLang_toArray(count),itrOp);// XXX? own iterator type
     if(!iterator.hasNext()){
       return;
