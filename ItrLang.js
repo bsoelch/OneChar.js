@@ -781,6 +781,8 @@ function itrLang_binaryNumberOp(a,b,f){
   }
   if(a instanceof Array||b instanceof Array){
     let arrayA=itrLang_asArray(a),arrayB=itrLang_asArray(b),res=new Array(Math.max(arrayA.length,arrayB.length));
+    if((arrayA.length==0&&itrLang_numberOrMatrix(b))||(arrayB.length==0&&itrLang_numberOrMatrix(a)))
+      return [];//operation on empty array and number gives empty array
     for(let i=0;i<arrayA.length&&i<arrayB.length;i++)
       res[i]=itrLang_binaryNumberOp(arrayA[i],arrayB[i],f);
     for(let i=arrayB.length;i<arrayA.length;i++)
@@ -1912,7 +1914,7 @@ function itrLang_stepProgram(){
             let c=itrLang_compareNumbers(x,0n);return c>0?1n:c<0?-1n:0n;
           }
           if(x instanceof Complex)
-            return itrLang_divide(x,Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary)))));
+            return itrLang_divide(x,Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(x.real,x.real),itrLang_multiply(x.imaginary,x.imaginary)))));
           throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
         }));
       }break;
@@ -1924,7 +1926,7 @@ function itrLang_stepProgram(){
           if(itrLang_isreal(x))
             return itrLang_compareNumbers(x,0n)<0?itrLang_negate(x):x;
           if(x instanceof Complex)
-            return Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary))));
+            return Math.sqrt(itrLang_asFloat(itrLang_add(itrLang_multiply(x.real,x.real),itrLang_multiply(x.imaginary,x.imaginary))));
           if(x instanceof Matrix)
             return itrLang_determinant(x);
           throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${x.constructor.name}`);
