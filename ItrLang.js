@@ -2030,6 +2030,32 @@ function itrLang_stepProgram(){
         }
         throw Error(`unsupported operand for ${String.fromCodePoint(Number(command))}: ${a.constructor.name}`);
       }break;
+    case ord('¨'):{
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        if(itrLang_iscomplex(a)&&itrLang_iscomplex(b)){
+          a=new Complex(a);
+          b=new Complex(b);
+          let reverseX=false,reverseY=false;
+          let x0=itrLang_asInt(a.real),x1=itrLang_asInt(b.real),y0=itrLang_asInt(a.imaginary),y1=itrLang_asInt(b.imaginary);
+          // XXX? round away from center
+          if(itrLang_compareNumbers(x0,x1)>0){
+            reverseX=true;
+          }
+          if(itrLang_compareNumbers(y0,y1)>0){
+            reverseY=true;
+          }
+          let r=[];
+          for(let x=x0;reverseX?itrLang_compareNumbers(x,x1)>=0:itrLang_compareNumbers(x,x1)<=0;x+=reverseX?-1n:1n){
+            for(let y=y0;reverseY?itrLang_compareNumbers(y,y1)>=0:itrLang_compareNumbers(y,y1)<=0;y+=reverseY?-1n:1n){
+              r.push(new Complex(x,y));
+            }
+          }
+          itrLang_pushValue(r);
+          break;
+        }
+        throw Error(`unsupported operands for ${String.fromCodePoint(Number(command))} : ${a.constructor.name} and ${b.constructor.name}`);
+      }break;
     case ord('L'):{//length
         let a=itrLang_peekValue();
         if(a instanceof Array)
