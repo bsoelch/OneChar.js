@@ -1107,7 +1107,7 @@ const ITR_OP_TIMES=7;//go through all elements of Cartesian product
 const ITR_OP_SUBSET=8;//go through all elements of power set
 
 //list of all iterator operations
-const iteratorOps=[ord('F'),ord('µ'),ord('R'),ord('M'),ord('×'),ord('Y'),ord('C'),ord('¶')];
+const iteratorOps=[ord('F'),ord('µ'),ord('R'),ord('M'),ord('X'),ord('Y'),ord('C'),ord('¶')];
 //list of all operators that are allowed as an isolated argument to a iterator operation
 const singleByteIteratorArgs=[
   ord(' '),ord('£'),ord('¥'),
@@ -2279,7 +2279,7 @@ function itrLang_stepProgram(){
         itrLang_applyItrOp(ITR_OP_FLAT_MAP,l);
         return;//unfinished operation
       }
-    case ord('×'):{//Cartesian product
+    case ord('X'):{//Cartesian product
         let l=[];
         ip=readItrArgs(ip,l);
         itrLang_applyItrOp(ITR_OP_TIMES,l);
