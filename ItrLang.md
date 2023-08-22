@@ -137,7 +137,7 @@ unary:
 binary:
 * `Y` zip: zip lists combining with the given subroutine
 * `C` Cauchy product: go through diagonals of Cartesian product combining each element pair with the given subroutine
-* `X` Cartesian product:  go through all pairs combining with the given operation
+* `X` Cartesian product:  go through all pairs combining with the given subroutine
 <!-- TODO describe iterator operations -->
 
 ## Type-conversion
