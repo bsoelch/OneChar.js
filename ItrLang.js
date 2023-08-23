@@ -220,6 +220,23 @@ function itrLang_exp(a){
   return res;
 }
 //TODO mlog,mpow
+function itrLang_log(a){
+  if(a instanceof Array){
+    let res=[];
+    a.forEach(e=>res.push(itrLang_exp(e)));
+    return res;
+  }
+  if(itrLang_isreal(a)&&itrLang_compareNumbers(a,0n)>0){
+    return Math.log(itrLang_asFloat(a));// TODO logarithm for numbers that don't fit into a float
+  }
+  if(itrLang_iscomplex(a)){
+    a=new Complex(a);
+    let r=itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary));
+    let phi=Math.atan2(itrLang_asFloat(a.imaginary),itrLang_asFloat(a.real));
+    return new Complex(itrLang_divide(itrLang_log(r),2n),phi);
+  }
+  throw `unsupported type for logarithm function: ${a.constructor.name}`;
+}
 
 function itrLang_popStack(){
   if(stackStack.length>0)
@@ -1021,6 +1038,9 @@ function itrLang_pow(a,b){
       b>>=1n;
     }
     return res;
+  }
+  if(itrLang_numberOrMatrix(a)&&itrLang_numberOrMatrix(b)){
+    return itrLang_exp(itrLang_multiply(itrLang_log(a),b));
   }
   if(a instanceof Array||b instanceof Array){
     let arrayA=itrLang_asArray(a),arrayB=itrLang_asArray(b),res=new Array(Math.max(arrayA.length,arrayB.length));
@@ -2095,6 +2115,15 @@ function itrLang_stepProgram(){
     case ord('e'):{//exponential
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_exp(a));
+      }break;
+    case ord('n'):{//natural logarithm
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_log(a));
+      }break;
+    case ord('l'):{//logarithm
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_divide(itrLang_log(a),itrLang_log(b)));
       }break;
     case ord('½'):{
         let a=itrLang_popValue();
