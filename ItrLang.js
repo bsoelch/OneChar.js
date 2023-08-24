@@ -838,6 +838,37 @@ function itrLang_compareNumbers(x,y){
   }
   throw `incompatible number types for number comparison: ${x.constructor.name} and ${y.constructor.name}`;
 }
+function itrLang_equals(x,y){
+  if(itrLang_isnumber(x) && itrLang_isnumber(y))
+    return itrLang_compareNumbers(x,y)==0;
+  if(itrLang_isnumber(x) || itrLang_isnumber(y))
+    return false;
+  if(x instanceof Array&&y instanceof Array){
+    if(x.length!=y.length)
+      return false;
+    for(let i=0;i<x.length;i++){
+      if(!itrLang_equals(x[i],y[i]))
+        return false;
+    }
+    return true;
+  }
+  if(x instanceof Array||y instanceof Array)
+    return false;
+  if(x instanceof Matrix&&y instanceof Matrix){
+    let nrows=Math.max(x.nrows,y.nrows);
+    let ncolumns=Math.max(x.ncolumns,y.ncolumns);
+    for(let r=0;r<nrows;r++){
+      for(let c=0;c<ncolumns;c++){
+        if(!itrLang_equals(x.at(r,c),y.at(r,c)))
+          return false;
+      }
+    }
+    return true;
+  }
+  if(x instanceof Matrix||y instanceof Matrix)
+    return false;
+  throw `incompatible number types for equality: ${x.constructor.name} and ${y.constructor.name}`;
+}
 function itrLang_add(a,b){
   numberAdd=(x,y)=>{
     if(itrLang_isint(x) && itrLang_isint(y))
@@ -1135,9 +1166,10 @@ const ITR_OP_ZIP=5;//zip operation
 const ITR_OP_CAUCHY=6;//Cauchy-product
 const ITR_OP_TIMES=7;//go through all elements of Cartesian product
 const ITR_OP_SUBSET=8;//go through all elements of power set
+const ITR_OP_GROUP=9;
 
 //list of all iterator operations
-const iteratorOps=[ord('F'),ord('µ'),ord('R'),ord('M'),ord('X'),ord('Y'),ord('C'),ord('¶')];
+const iteratorOps=[ord('F'),ord('µ'),ord('R'),ord('M'),ord('G'),ord('X'),ord('Y'),ord('C'),ord('¶')];
 //list of all operators that are allowed as an isolated argument to a iterator operation
 const singleByteIteratorArgs=[
   ord(' '),ord('£'),ord('¥'),
@@ -1246,6 +1278,30 @@ class ForEachItr extends ItrLang_Iterator{
   onEnd(){
     if(this.unwraped)
       return;
+    let oldStack=itrLang_popStack();
+    oldStack.push(valueStack);
+    valueStack=oldStack;
+  }
+}
+class GroupItr extends ItrLang_Iterator{
+  constructor(vector,opType=ITR_OP_MAP){
+    super();
+    this.vector=vector;
+    this.index=0;
+  }
+  hasNext(){
+    return this.index<this.vector.length;
+  }
+  pushNext(){
+    let i0=this.index++;
+    let e=this.vector.at(i0);
+    let group=[e];
+    while(this.index<this.vector.length&&itrLang_equals(e,this.vector.at(this.index))){
+      group.push(this.vector.at(this.index++));
+    }
+    itrLang_pushValue(group);
+  }
+  onEnd(){
     let oldStack=itrLang_popStack();
     oldStack.push(valueStack);
     valueStack=oldStack;
@@ -1422,6 +1478,23 @@ function itrLang_applyItrOp(itrOp,code){
       valueStack=[];
       iterator.pushNext();
     }
+    callStackPush(ip);
+    callStackPush(sourceCode);
+    callStackPush(iterator);
+    sourceCode=code;
+    ip=0n;
+    return;
+  }
+  if(itrOp==ITR_OP_GROUP){
+    let vector=itrLang_toArray(itrLang_popValue());
+    let iterator=new GroupItr(vector,itrOp);
+    if(!iterator.hasNext()){
+      itrLang_pushValue([]);
+      return;
+    }
+    stackStack.push(valueStack);
+    valueStack=[];
+    iterator.pushNext();
     callStackPush(ip);
     callStackPush(sourceCode);
     callStackPush(iterator);
@@ -1909,7 +1982,7 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)>0)));
       }break;
-    case ord('='):{
+    case ord('='):{// TODO operation for checking true equality
         let b=itrLang_popValue();
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>BigInt(itrLang_compareNumbers(x,y)==0)));
@@ -2310,6 +2383,12 @@ function itrLang_stepProgram(){
         let l=[];
         ip=readItrArgs(ip,l);
         itrLang_applyItrOp(ITR_OP_MAP,l);
+        return;//unfinished operation
+      }
+    case ord('G'):{//group
+        let l=[];
+        ip=readItrArgs(ip,l);
+        itrLang_applyItrOp(ITR_OP_GROUP,l);
         return;//unfinished operation
       }
     case ord('R'):{//reduce
