@@ -226,7 +226,7 @@ function itrLang_log(a){
     a.forEach(e=>res.push(itrLang_exp(e)));
     return res;
   }
-  if(itrLang_isreal(a)&&itrLang_compareNumbers(a,0n)>0){
+  if(itrLang_isreal(a)&&itrLang_compareNumbers(a,0n)>=0){
     return Math.log(itrLang_asFloat(a));// TODO logarithm for numbers that don't fit into a float
   }
   if(itrLang_iscomplex(a)){
@@ -788,6 +788,16 @@ function itrLang_negate(x){
   throw `unsupported number type for negation: ${x.constructor.name}`;
   }
   return itrLang_unaryNumberOp(x,numberNegate);
+}
+function itrLang_conjugate(x){
+  numberConjugate=(x)=>{
+    if(itrLang_isreal(x))
+      return new Complex(x,0n);
+    if(x instanceof Complex)
+      return new Complex(x.real,itrLang_negate(x.imaginary));
+  throw `unsupported number type for complex conjugation: ${x.constructor.name}`;
+  }
+  return itrLang_unaryNumberOp(x,numberConjugate);
 }
 function itrLang_binaryNumberOp(a,b,f){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
@@ -1957,6 +1967,10 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_negate(a));
       }break;
+    case ord('c'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_conjugate(a));
+      }break;
     case ord('¯'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_invert(a));
@@ -2162,8 +2176,10 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_pow(a,b));
       }break;
-    case ord('T'):{
+    case ord('T'):case ord('H'):{
         let a = itrLang_popValue();
+        if(command==ord('H'))// H: hermitean -> conjugate&transpose
+           a=itrLang_conjugate(a);
         if(itrLang_isnumber(a)){
             itrLang_pushValue(a);
             return;
