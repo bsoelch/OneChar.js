@@ -223,7 +223,7 @@ function itrLang_exp(a){
 function itrLang_log(a){
   if(a instanceof Array){
     let res=[];
-    a.forEach(e=>res.push(itrLang_exp(e)));
+    a.forEach(e=>res.push(itrLang_log(e)));
     return res;
   }
   if(itrLang_isreal(a)&&itrLang_compareNumbers(a,0n)>=0){
@@ -370,17 +370,39 @@ function itrLang_isdigit(c){
   return c>=ord('0')&&c<=ord('9');
 }
 
+function itrLang_finishParseNumber(expr,current,base,fractionalDigits){
+  if(current.length>0||fractionalDigits>=0){
+    if(fractionalDigits>=0){
+      let magnitude=BigInt(current.toString(),base);
+      expr.push(Number(magnitude)/Math.pow(base,fractionalDigits));
+      fractionalDigits=-1;
+    }else{
+      expr.push(BigInt(current.toString(),base));
+    }
+  }
+}
 function itrLang_tryParseNumber(str){
   let expr=[],current="";
   let base=10;
+  let fractionalDigits=-1;
   for(let i=0;i<str.length;i++){ // TODO support floats
     let c=str[i];
     if(c>=ord('0')&&(c<=ord('0')+BigInt(Math.min(base-1,9)))){
       current+=String.fromCodePoint(Number(c));
+      if(fractionalDigits>=0)
+        fractionalDigits++;
       continue;
     }
     if(base==16&&((c>=ord('A')&&c<=ord('F'))||(c>=ord('a')&&c<=ord('f')))){
       current+=String.fromCodePoint(Number(c));
+      if(fractionalDigits>=0)
+        fractionalDigits++;
+      continue;
+    }
+    if(c==ord('.')){
+      if(fractionalDigits>=0)
+        return undefined;//double dot
+      fractionalDigits=0;
       continue;
     }
     if(current=="0"&&c==ord('x')){//hex literal
@@ -392,17 +414,15 @@ function itrLang_tryParseNumber(str){
       continue;
     }
     if(itrLang_isspace(c)){
-      if(current.length>0){
-          expr.push(BigInt(current.toString(),base));
-      }
+      itrLang_finishParseNumber(expr,current,base,fractionalDigits);
+      fractionalDigits=-1;
       base=10;
       current=[];
       continue;
     }
     if(['+','-','*','/','I','J','K','i','j','k'].map(c=>ord(c)).indexOf(c)>=0){
-      if(current.length>0){
-          expr.push(BigInt(current.toString(),base));
-      }
+      itrLang_finishParseNumber(expr,current,base,fractionalDigits);
+      fractionalDigits=-1;
       base=10;
       expr.push(String.fromCodePoint(Number(c)));
       current=[];
@@ -410,8 +430,8 @@ function itrLang_tryParseNumber(str){
     }
     return undefined;//invalid char
   }
-  if(current.length>0)
-    expr.push(BigInt(current.toString(),base));
+  itrLang_finishParseNumber(expr,current,base,fractionalDigits);
+  fractionalDigits=-1;
   for(let i=0;i<expr.length;i++){// '\' and imaginary units
     if(expr[i]=='/'){
       let l=1n,r=1n;
@@ -1176,7 +1196,12 @@ function itrLang_pow(a,b){
     }
     return res;
   }
-  if(itrLang_numberOrMatrix(a)&&itrLang_numberOrMatrix(b)){
+  if(itrLang_numberOrMatrix(a)&&itrLang_numberOrMatrix(b)){//XXX handle zero matrix
+    if(itrLang_isnumber(a)&&itrLang_compareNumbers(a,0n)==0){// 0^*
+      if(itrLang_isnumber(b)&&itrLang_compareNumbers(b,0n)==0)
+        return 1n;
+      return a;
+    }
     return itrLang_exp(itrLang_multiply(itrLang_log(a),b));
   }
   if(a instanceof Array||b instanceof Array){
@@ -1195,6 +1220,7 @@ function itrLang_pow(a,b){
 //characters whose meaning cannot be overwritten
 const overwriteBlacklist=[ord(';'),ord(' '),ord('\n'),ord('»'),ord('«'),ord('"'),ord('\''),ord('('),ord(','),ord(')'),ord('©'),ord('?'),ord('!'),ord('['),ord(']')];
 let overwrites=new Map([]);
+let decimalDigits=-1;
 class ItrLang_OpOverwrite{
   constructor(op,value,autoCall){
     this.op=op;
@@ -1214,6 +1240,7 @@ function itrLangInit(code){
   overwrites=new Map([]);
   implicitIn=true;
   implicitOut=true;
+  decimalDigits=-1;
 }
 function itrLang_onStart(){
   let code=sourceCode;
@@ -1669,8 +1696,16 @@ function itrLang_applyItrOp(itrOp,code){
   throw Error(`unknown itr-operation ${itrOp}`);
 }
 
+function finishedNumber(){
+  if(decimalDigits>=0){
+    let v=popValue();
+    itrLang_pushValue(itrLang_asFloat(v)/Math.pow(10,decimalDigits));
+    decimalDigits=-1;
+  }
+}
 function itrLang_finishedSubroutine(){
   numberMode=false;
+  finishedNumber();
   if(!callStackEmpty() && callStackPeek() instanceof ItrLang_Iterator){
     let iterator=callStackPeek();
     iterator.prepareNext();
@@ -1877,7 +1912,21 @@ function itrLang_stepProgram(){
     itrLang_pushValue(o.value);
     return;
   }
+  if(command==ord('.')){
+    if(decimalDigits>=0){
+      finishedNumber();
+    }
+    decimalDigits=0;
+    if(!numberMode){
+      itrLang_pushValue(0n);
+      numberMode=true;
+    }
+    return;
+  }
   if(command>=ord('0')&&command<=ord('9')){
+    if(decimalDigits>=0){
+      decimalDigits++;
+    }
     if(numberMode){
       let v=popValue();
       itrLang_pushValue(10n*v+command-ord('0'));
@@ -1889,6 +1938,7 @@ function itrLang_stepProgram(){
     return;
   }
   numberMode=false;
+  finishedNumber();
   switch(command){
     case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
     case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
@@ -2312,6 +2362,10 @@ function itrLang_stepProgram(){
         let b=itrLang_popValue();
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_divide(itrLang_log(a),itrLang_log(b)));
+      }break;
+    case ord('r'):{//square root
+        let a=itrLang_popValue();// TODO directly compute of square root
+        itrLang_pushValue(itrLang_pow(a,new Fraction(1n,2n)));
       }break;
     case ord('½'):{
         let a=itrLang_popValue();
