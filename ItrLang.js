@@ -237,6 +237,71 @@ function itrLang_log(a){
   }
   throw `unsupported type for logarithm function: ${a.constructor.name}`;
 }
+function itrLang_factor(a){
+  if(itrLang_isreal(a)){
+    a=itrLang_asInt(a);//XXX? factor fractions
+    if(a==0n)
+      return [a];
+    a=a<0n?-a:a;
+    let res=[];
+    while(a%2n==0n){
+      a/=2n;res.push(2n);
+    }
+    for(let f=3n;f*f<=a;f+=2n){
+      while(a%f==0n){
+        a/=f;res.push(f);
+      }
+    }
+    if(a!=1n)
+      res.push(a);
+    return res;
+  }
+  if(itrLang_iscomplex(a)){
+    // based on this algorithm: https://stackoverflow.com/questions/2269810/whats-a-nice-method-to-factor-gaussian-integers/2271645#2271645
+    a=new Complex(a);
+    a.real=itrLang_asInt(a.real);
+    a.imaginary=itrLang_asInt(a.imaginary);
+    if(a.real==0n&&a.imaginary==0n)
+      return [a];
+    let n=a.real*a.real+a.imaginary*a.imaginary;
+    let res=[];
+    let p=new Complex(1n,1n);
+    while(n%2n==0n){
+      n/=2n;res.push(p);
+    }
+    let h=(p)=>{
+      for(let k=2n;k<p;k++){
+        if(k**((p-1n)/2n)%p==p-1n)
+            return itrLang_gcd(new Complex(k**((p-1n)/4n),1n),p);
+      }
+      console.log(p);
+    }
+    for(let f=3n;f*f<=n;f+=2n){
+      if(f%4n==1n){
+        p=h(f);
+        while(n%f==0n){
+          n/=f;res.push(p);
+        }
+      }else{
+        while(n%f==0n){
+          n/=f*f;res.push(f);
+        }
+      }
+    }
+    if(n!=1n){
+      if(n%4n==1n){
+        res.push(h(n));
+      }else{
+        throw new Error(`unexpected value for norm`);
+      }
+    }
+    return res;
+  }
+  // TODO factor matrix -> Jordan decomposition
+  // XXX? factor array -> polynomial factorization
+  throw `unsupported type for logarithm function: ${a.constructor.name}`;
+}
+
 
 function itrLang_popStack(){
   if(stackStack.length>0)
@@ -986,6 +1051,37 @@ function itrLang_remainder(a,b){
     throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
   }
   return itrLang_binaryNumberOp(a,b,numberRemainder);
+}
+function itrLang_gcd(a,b){
+  numberGcd=(x,y)=>{
+    if(itrLang_isreal(x)&&itrLang_isreal(y))
+      return gcd(itrLang_asInt(x),itrLang_asInt(y));
+    if(itrLang_iscomplex(x)&&itrLang_iscomplex(y)){
+      x=new Complex(x);y=new Complex(y);
+      x.real=itrLang_asInt(x.real);
+      x.imaginary=itrLang_asInt(x.imaginary);
+      y.real=itrLang_asInt(y.real);
+      y.imaginary=itrLang_asInt(y.imaginary);
+      if(x.real*x.real+x.imaginary*x.imaginary<y.real*y.real+y.imaginary*y.imaginary){
+        [x,y]=[y,x];
+      }
+      while(y.real!=0n||y.imaginary!=0n){
+        x=itrLang_remainder(x,y);
+        [x,y]=[y,x];
+      }
+      // always choose version with positive real and non-negative imaginary par
+      if(x.real<0n&&x.imaginary<=0n){
+        x=itrLang_negate(x);
+      }else if(x.imaginary<0n){
+        [x.real,x.imaginary]=[-x.imaginary,x.real];
+      }else if(x.real<=0n){
+        [x.real,x.imaginary]=[x.imaginary,-x.real];
+      }
+      return x;
+    }
+    throw `incompatible number types for binary arithmetic operation: ${x.constructor.name} and ${y.constructor.name}`;
+  }
+  return itrLang_binaryNumberOp(a,b,numberGcd);
 }
 function itrLang_multiply(a,b){
   if(itrLang_isnumber(a)&&itrLang_isnumber(b)){
@@ -2002,6 +2098,11 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_compareNumbers(x,y)>0?x:y));
       }break;
+    case ord('g'):{//gcd
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_binaryNumberOp(a,b,(x,y)=>itrLang_gcd(x,y)));
+      }break;
     case ord('¬'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_unaryNumberOp(a,x=>BigInt(itrLang_asBool(x)?0:1)));
@@ -2227,6 +2328,10 @@ function itrLang_stepProgram(){
     case ord('³'):{
         let a=itrLang_popValue();
         itrLang_pushValue(itrLang_multiply(a,itrLang_multiply(a,a)));
+      }break;
+    case ord('f'):{
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_factor(a));
       }break;
     // matrix operations
     case ord('*'):{
