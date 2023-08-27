@@ -299,7 +299,7 @@ function itrLang_factor(a){
   }
   // TODO factor matrix -> Jordan decomposition
   // XXX? factor array -> polynomial factorization
-  throw `unsupported type for logarithm function: ${a.constructor.name}`;
+  throw `unsupported type for factorization: ${a.constructor.name}`;
 }
 
 
@@ -385,7 +385,7 @@ function itrLang_tryParseNumber(str){
   let expr=[],current="";
   let base=10;
   let fractionalDigits=-1;
-  for(let i=0;i<str.length;i++){ // TODO support floats
+  for(let i=0;i<str.length;i++){
     let c=str[i];
     if(c>=ord('0')&&(c<=ord('0')+BigInt(Math.min(base-1,9)))){
       current+=String.fromCodePoint(Number(c));
@@ -1089,7 +1089,7 @@ function itrLang_gcd(a,b){
         x=itrLang_remainder(x,y);
         [x,y]=[y,x];
       }
-      // always choose version with positive real and non-negative imaginary par
+      // always choose version with positive real and non-negative imaginary part
       if(x.real<0n&&x.imaginary<=0n){
         x=itrLang_negate(x);
       }else if(x.imaginary<0n){
@@ -1216,6 +1216,33 @@ function itrLang_pow(a,b){
   }
   throw `incompatible types for exponentiation: ${a.constructor.name} and ${b.constructor.name}`;
 }
+function itrLang_repeat(a,b){
+  let n=0n;
+  if(itrLang_isnumber(b)||itrLang_isnumber(a)){
+    if(itrLang_isnumber(b)){
+      n=itrLang_asInt(b);
+      a=itrLang_asArray(a);
+    }else{
+      n=itrLang_asInt(a);
+      a=itrLang_asArray(b);
+    }
+    if(n==0n)
+      return [];
+    if(n<0n)
+      a=a.toReversed();
+    a=new Array(Math.abs(Number(n))).fill(a).flat();
+    return a;
+  }
+  if(a instanceof Array&&b instanceof Array){
+    let l=Math.min(a.length,b.length);
+    let res=[];
+    for(let i=0;i<l;i++){
+      res=res.concat(itrLang_repeat(a[i],b[i]));
+    }
+    return res;
+  }
+  throw `unsupported types for string repetition: ${a.constructor.name} and ${b.constructor.name}`;
+}
 
 //characters whose meaning cannot be overwritten
 const overwriteBlacklist=[ord(';'),ord(' '),ord('\n'),ord('»'),ord('«'),ord('"'),ord('\''),ord('('),ord(','),ord(')'),ord('©'),ord('?'),ord('!'),ord('['),ord(']')];
@@ -1256,7 +1283,7 @@ function itrLang_onStart(){
           }
           continue;
       }
-      if([ord('_'),ord('#'),ord('§')].indexOf(code[i])>=0){
+      if([ord('¢'),ord('#'),ord('§')].indexOf(code[i])>=0){
           implicitIn=false;
           continue;
       }
@@ -1915,6 +1942,7 @@ function itrLang_stepProgram(){
   if(command==ord('.')){
     if(decimalDigits>=0){
       finishedNumber();
+      numberMode=false;
     }
     decimalDigits=0;
     if(!numberMode){
@@ -1940,8 +1968,9 @@ function itrLang_stepProgram(){
   numberMode=false;
   finishedNumber();
   switch(command){
+    //digits have already been handled
     case ord('0'):case ord('1'):case ord('2'):case ord('3'):case ord('4'):
-    case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9')://digits have already been handled
+    case ord('5'):case ord('6'):case ord('7'):case ord('8'):case ord('9'):case ord('.'):
     case ord('"'):case ord('\'')://string and char-literals have already been handled
     case ord(' '):case ord('\t'):case ord('\n'):case ord('\r')://ignore spaces
       break;
@@ -2038,9 +2067,10 @@ function itrLang_stepProgram(){
         let a=itrLang_popValue();
       }break;
     // IO
-    case ord('_'):{// read byte
-        itrLang_pushValue(getchar());
+    case ord('¢'):{// read char
+        itrLang_pushValue(getchar());//XXX read code-point not byte
       }break;
+    // TODO read byte
     case ord('#'):{// parse value
         itrLang_readValue();
       }break;
@@ -2448,6 +2478,11 @@ function itrLang_stepProgram(){
         let b=itrLang_asArray(itrLang_popValue());
         let a=itrLang_asArray(itrLang_popValue());
         itrLang_pushValue(a.concat(b));
+      }break;
+    case ord('×'):{
+        let b=itrLang_popValue();
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_repeat(a,b));
       }break;
     case ord('é'):{
         let n=1;
