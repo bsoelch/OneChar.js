@@ -12,6 +12,13 @@ function gcd(a,b){
   }
   return a;
 }
+function even_round(x){
+  let r=Math.round(x);
+  if(Math.abs(x-r)==0.5){//exactly half
+    return 2*Math.round(x/2);
+  }
+  return r;
+}
 
 class Fraction{
   constructor(numerator,denominator=1n){
@@ -236,6 +243,27 @@ function itrLang_log(a){
     return new Complex(itrLang_divide(itrLang_log(r),2n),phi);
   }
   throw `unsupported type for logarithm function: ${a.constructor.name}`;
+}
+function itrLang_sqrt(a){
+  if(a instanceof Array){
+    let res=[];
+    a.forEach(e=>res.push(itrLang_sqrt(e)));
+    return res;
+  }
+  if(itrLang_isreal(a)&&itrLang_compareNumbers(a,0n)>=0){
+    // XXX? integer square root
+    return Math.sqrt(itrLang_asFloat(a));
+  }
+  if(itrLang_iscomplex(a)){
+    a=new Complex(a);
+    // sqrt(z)=sqrt((|z|+re(z))/2)+i*sqrt((|z|-re(z))/2) im(z)>=0
+    // sqrt(z)=sqrt((|z|+re(z))/2)-i*sqrt((|z|-re(z))/2) im(z)<0
+    let abs=itrLang_sqrt(itrLang_add(itrLang_multiply(a.real,a.real),itrLang_multiply(a.imaginary,a.imaginary)));
+    return new Complex(
+                itrLang_sqrt(itrLang_divide(itrLang_add(abs,a.real),2)),
+                itrLang_multiply(itrLang_sqrt(itrLang_divide(itrLang_subtract(abs,a.real),2)),itrLang_compareNumbers(a.imaginary,0)<0?-1n:1n));
+  }
+  throw `unsupported type for square root function: ${a.constructor.name}`;
 }
 function itrLang_factor(a){
   if(itrLang_isreal(a)){
@@ -780,7 +808,7 @@ function itrLang_asInt(a){
   if(typeof a === "bigint")
     return a;
   if(typeof a === "number")
-    return BigInt(Math.round(a));
+    return BigInt(even_round(a));
   if(a instanceof Fraction){
     let d=a.numerator/a.denominator;
     if(a.numerator<0n){
@@ -1876,7 +1904,6 @@ function itrLang_toBytes(){
   return new Uint8Array(bytes);
 }
 
-//TODO if no explicit input stack underflow implicitly reads from input (# operation)
 
 //XXX? allow reading input multiple times/ save first ... input elements in variables
 function itrLang_stepProgram(){
@@ -2394,8 +2421,14 @@ function itrLang_stepProgram(){
         itrLang_pushValue(itrLang_divide(itrLang_log(a),itrLang_log(b)));
       }break;
     case ord('r'):{//square root
-        let a=itrLang_popValue();// TODO directly compute of square root
-        itrLang_pushValue(itrLang_pow(a,new Fraction(1n,2n)));
+        let a=itrLang_popValue();
+        itrLang_pushValue(itrLang_sqrt(a));
+      }break;
+    case ord('æ'):{//functions page 1
+        throw new Error("unimplemented");
+      }break;
+    case ord('Æ'):{//functions page 2
+        throw new Error("unimplemented");
       }break;
     case ord('½'):{
         let a=itrLang_popValue();
@@ -2522,10 +2555,11 @@ function itrLang_stepProgram(){
           reverse=true;
         }
         let parts=new Array(n);
+        let left=0;
         for(let i=0;i<n;i++){
-          let left=Math.round((i*v.length)/n);
-          let right=Math.round(((i+1)*v.length)/n);
+          let right=even_round(((i+1)*v.length)/n);
           parts[i]=v.slice(left,right);
+          left=right;
         }
         if(reverse){
           for(let i=n-1;i>=0;i--){
