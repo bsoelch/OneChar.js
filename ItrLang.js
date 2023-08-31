@@ -2037,7 +2037,14 @@ function itrLang_stepProgram(){
     case ord('©'):
       callStackPush(ip);
       callStackPush(sourceCode);
-      sourceCode=itrLang_toArray(itrLang_popValue(),false);//get string code-points
+      sourceCode=[];
+      let f=(e)=>{
+        if(e instanceof Array)
+          e.forEach(f);
+        else
+          sourceCode.push(e)
+      }
+      itrLang_toArray(itrLang_popValue(),false).forEach(f);//get string code-points
       ip=0n;
       break;
     case ord('?'):// ? start if/while statement
@@ -2425,6 +2432,11 @@ function itrLang_stepProgram(){
         itrLang_pushValue(itrLang_sqrt(a));
       }break;
     case ord('æ'):{//functions page 1
+        command=readInstruction(ip++);
+        if(command==ord(`r`)){//random value in [0,1)
+          itrLang_pushValue(Math.random());
+          break;
+        }
         throw new Error("unimplemented");
       }break;
     case ord('Æ'):{//functions page 2
